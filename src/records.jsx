@@ -312,4 +312,4 @@ const Records = () => {
   );
 };
 
-export default records;
+export default Records;
