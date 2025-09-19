@@ -6,7 +6,7 @@ import logo from "./assets/LOGO.png";
 
 
 // Pages for Teachers
-import Dashboard from "./Dashboard";
+import Dashboard from "./dashboard";
 import Records from "./Records";
 import Signup from "./signup";
 import ProtectedRoute from "./ProtectedRoute";
