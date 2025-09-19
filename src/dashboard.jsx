@@ -68,7 +68,7 @@ const ranking = [
 
 
 
-const Dashboard = () => {
+const dashboard = () => {
   // States
   const [visible, setVisible] = useState(false);
   const [user, setUser] = useState(null);
