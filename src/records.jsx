@@ -1,13 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import supabase from "./config/supabaseclient";
-
-// Components
 import Navbar from "./components/Navbar";
-import ProfileMenu from "./components/ProfileMenu";
 import Sidebar from "./components/Sidebar";
-import SectionCard from "./components/SectionCard";
-import SectionModal from "./components/SectionModal";
-import StudentModal from "./components/StudentModal";
+import ProfileMenu from "./components/ProfileMenu";
 
 const Records = () => {
   const [visible, setVisible] = useState(false);
@@ -15,299 +11,431 @@ const Records = () => {
   const [showLogout, setShowLogout] = useState(false);
   const [user, setUser] = useState(null);
   const [profilePic, setProfilePic] = useState(null);
-
-  // Sections
   const [sections, setSections] = useState([]);
-  const [sectionName, setSectionName] = useState("");
-  const [currentSection, setCurrentSection] = useState(null);
+  const [filteredSections, setFilteredSections] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [schoolYears, setSchoolYears] = useState([]);
+  const [schoolYearFilter, setSchoolYearFilter] = useState("");
+  const [genderFilter, setGenderFilter] = useState("");
+  const [studentCounts, setStudentCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  // Students
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [showStudentModal, setShowStudentModal] = useState(false);
-  const [newStudent, setNewStudent] = useState({
-    lrn: "",
-    firstname: "",
-    middlename: "",
-    lastname: "",
-    birthdate: "",
-    contact_number: "",
-  });
+  const navigate = useNavigate();
 
-  // ✅ Fetch current user and their sections + profile pic
-  useEffect(() => {
-    const fetchData = async () => {
-      const { data: userData, error } = await supabase.auth.getUser();
-      if (!error && userData?.user) {
-        setUser(userData.user);
-        await loadSections(userData.user.id);
+  // Memoized data fetching
+  const fetchData = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError("");
 
-        // 🔑 Load profile picture from teachers table
-        const { data: teacher, error: teacherError } = await supabase
-          .from("teachers")
-          .select("profile_pic")
-          .eq("auth_id", userData.user.id)
-          .single();
+    // Get logged-in user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!user || userError) {
+      setError("Unable to fetch user data");
+      return;
+    }
+    setUser(user);
 
-        if (!teacherError && teacher?.profile_pic) {
-          setProfilePic(teacher.profile_pic);
+    // Get teacher profile
+    const { data: teacher, error: teacherError } = await supabase
+      .from("teachers")
+      .select("id, profile_pic, school_id")
+      .eq("auth_id", user.id)
+      .single();
+
+    if (teacherError || !teacher) {
+      setError("Teacher profile not found");
+      return;
+    }
+
+    if (teacher.profile_pic) setProfilePic(teacher.profile_pic);
+    console.log("👤 Auth user:", user);
+console.log("📚 Teacher record:", teacher);
+console.log("🏫 School ID:", teacher?.school_id);
+
+
+    const mySchoolId = teacher.school_id;
+    const teacherId = teacher.id; // ✅ This is the correct teacher ID to use
+
+    // Fetch school years and sections in parallel
+    const [syResponse, sectionsResponse] = await Promise.all([
+      supabase
+        .from("school_years")
+        .select("*")
+        .order("start_date", { ascending: false }),
+      supabase
+        .from("sections")
+        .select("id, name, grade_level, school_year_id")
+        .eq("school_id", mySchoolId)
+        .eq("adviser_id", teacherId) // ✅ Use teacher.id, not user.id
+    ]);
+
+    if (syResponse.error) console.error("School years error:", syResponse.error);
+    if (sectionsResponse.error) console.error("Sections error:", sectionsResponse.error);
+
+    if (syResponse.data) {
+      setSchoolYears(syResponse.data);
+      const activeSY = syResponse.data.find((sy) => sy.is_active);
+      if (activeSY) setSchoolYearFilter(activeSY.id);
+    }
+
+    if (sectionsResponse.data) {
+      setSections(sectionsResponse.data);
+
+      // Fetch student counts for all sections
+      const sectionIds = sectionsResponse.data.map((s) => s.id);
+      if (sectionIds.length > 0) {
+        const { data: studentsData, error: studErr } = await supabase
+          .from("students")
+          .select("section_id, gender")
+          .in("section_id", sectionIds);
+
+        if (studErr) console.error("Students error:", studErr);
+
+        if (studentsData) {
+          const counts = {};
+          sectionIds.forEach((sid) => {
+            const studentsInSection = studentsData.filter(
+              (st) => st.section_id === sid
+            );
+            counts[sid] = {
+              total: studentsInSection.length,
+              male: studentsInSection.filter((st) => st.gender === "Male").length,
+              female: studentsInSection.filter((st) => st.gender === "Female").length,
+            };
+          });
+          setStudentCounts(counts);
         }
       }
-    };
+    }
+
+    setSuccess("Data loaded successfully");
+    setTimeout(() => setSuccess(""), 3000);
+  } catch (err) {
+    setError("Failed to load data");
+    console.error("Fetch error:", err);
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // ✅ Load sections and student counts
-  const loadSections = async (teacherId) => {
-    const { data: sectionsData, error } = await supabase
-      .from("sections")
-      .select("*")
-      .eq("teacher_id", teacherId)
-      .order("created_at", { ascending: true });
+  // Enhanced filtering with gender support
+  useEffect(() => {
+    let result = sections;
 
-    if (!error) {
-      const sectionsWithCounts = await Promise.all(
-        sectionsData.map(async (section) => {
-          const { data: studentsData, error: studentError } = await supabase
-            .from("students")
-            .select("id")
-            .eq("section_id", section.id);
-          return {
-            ...section,
-            studentCount: studentError ? 0 : studentsData.length,
-          };
-        })
+    if (gradeFilter) {
+      result = result.filter((s) => Number(s.grade_level) === Number(gradeFilter));
+    }
+
+    if (schoolYearFilter) {
+      result = result.filter((s) => s.school_year_id === schoolYearFilter);
+    }
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter((s) =>
+        s.name.toLowerCase().includes(term) ||
+        s.grade_level.toString().includes(term)
       );
-      setSections(sectionsWithCounts);
-    } else {
-      console.error("Error loading sections:", error.message);
     }
-  };
 
-  // ✅ Load students for a section
-  const loadStudents = async (sectionId) => {
-    const { data, error } = await supabase
-      .from("students")
-      .select("*")
-      .eq("section_id", sectionId)
-      .order("lastname", { ascending: true });
-
-    if (!error) {
-      const studentsWithDisplay = data.map((s) => ({
-        ...s,
-        displayName: `${s.firstname} ${
-          s.middlename ? s.middlename.charAt(0).toUpperCase() + "." : ""
-        } ${s.lastname}`,
-      }));
-
-      setCurrentSection((prev) => ({
-        ...prev,
-        students: studentsWithDisplay,
-        studentCount: studentsWithDisplay.length,
-      }));
-
-      setSections((prev) =>
-        prev.map((sec) =>
-          sec.id === sectionId
-            ? { ...sec, studentCount: studentsWithDisplay.length }
-            : sec
-        )
-      );
-    } else {
-      console.error("Error loading students:", error.message);
-    }
-  };
-
-  // ✅ Add Section
-  const addSection = async () => {
-    if (!sectionName.trim() || !user) return;
-    const { data, error } = await supabase
-      .from("sections")
-      .insert([
-        {
-          name: sectionName.trim(),
-          teacher_id: user.id,
-          teacher_email: user.email,
-        },
-      ])
-      .select();
-
-    if (!error && data?.length) {
-      const newSec = { ...data[0], studentCount: 0 };
-      setSections((prev) => [...prev, newSec]);
-      setSectionName("");
-    } else {
-      console.error("Error adding section:", error?.message);
-    }
-  };
-
-  // ✅ Add Student
-  const addStudent = async () => {
-    if (!newStudent.lrn || !newStudent.firstname || !newStudent.lastname) return;
-
-    const { data, error } = await supabase
-      .from("students")
-      .insert([
-        {
-          lrn: newStudent.lrn,
-          firstname: newStudent.firstname.trim(),
-          middlename: newStudent.middlename.trim() || null,
-          lastname: newStudent.lastname.trim(),
-          birthdate: newStudent.birthdate || null,
-          contact_number: newStudent.contact_number || null,
-          section_id: currentSection.id,
-          teacher_id: user.id,
-          teacher_email: user.email,
-        },
-      ])
-      .select();
-
-    if (!error && data?.length) {
-      console.log("New student added:", data[0]);
-      await loadStudents(currentSection.id);
-      setNewStudent({
-        lrn: "",
-        firstname: "",
-        middlename: "",
-        lastname: "",
-        birthdate: "",
-        contact_number: "",
+    // Apply gender filter to count display
+    if (genderFilter) {
+      result = result.filter(section => {
+        const count = studentCounts[section.id] || { total: 0, male: 0, female: 0 };
+        return genderFilter === "Male" ? count.male > 0 : 
+               genderFilter === "Female" ? count.female > 0 : true;
       });
-      setShowStudentModal(false);
-    } else {
-      alert("Error adding student: " + error.message);
     }
+
+    setFilteredSections(result);
+  }, [sections, gradeFilter, schoolYearFilter, searchTerm, genderFilter, studentCounts]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setGradeFilter("");
+    setSchoolYearFilter("");
+    setGenderFilter("");
   };
 
-  // ✅ Delete Section
-  const deleteSection = async (id) => {
-    if (window.confirm("Are you sure you want to delete this section?")) {
-      const { error } = await supabase.from("sections").delete().eq("id", id);
-      if (!error) {
-        setSections((prev) => prev.filter((sec) => sec.id !== id));
-        if (currentSection?.id === id) setCurrentSection(null);
-      } else {
-        console.error("Error deleting section:", error.message);
-      }
-    }
-  };
+  // Get active filters count
+  const activeFiltersCount = [searchTerm, gradeFilter, schoolYearFilter, genderFilter].filter(Boolean).length;
 
-  // ✅ Update Section
-  const updateSection = async (id, newName) => {
-    console.log("Updating section:", id, "to name:", newName);
-    const { error } = await supabase
-      .from("sections")
-      .update({ name: newName })
-      .eq("id", id);
-    if (error) {
-      console.error("Error updating section:", error.message);
-    } else {
-      await loadSections(user.id);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar setVisible={setVisible} user={user} profilePic={profilePic} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading your sections...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Navbar with profilePic support */}
-      <Navbar
-        setVisible={setVisible}
-        user={user}
-        profilePic={profilePic}
-        setProfilePic={setProfilePic}
-      />
-
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Navbar setVisible={setVisible} user={user} profilePic={profilePic} />
       <Sidebar visible={visible} setVisible={setVisible} />
-
-      {showMenu && (
-        <ProfileMenu
-          profilePic={profilePic}
-          userEmail={user?.email}
-          setShowLogout={setShowLogout}
-        />
-      )}
+      {showMenu && <ProfileMenu profilePic={profilePic} userEmail={user?.email} />}
 
       {showLogout && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border p-6 rounded shadow z-50">
-          <h1 className="font-bold mb-4">Do you want to log out?</h1>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                window.location.href = "/";
-              }}
-              className="bg-yellow2 px-3 py-1 rounded"
-            >
-              Yes
-            </button>
-            <button
-              onClick={() => setShowLogout(false)}
-              className="border px-3 py-1 rounded"
-            >
-              No
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 p-6 bg-gray-50">
-        <h1 className="text-3xl font-bold mb-6">Sections</h1>
-
-        <div className="flex gap-2 mb-6">
-          <input
-            type="text"
-            value={sectionName}
-            onChange={(e) => setSectionName(e.target.value)}
-            placeholder="Enter section name"
-            className=" outline outline-Blue2 p-2 rounded w-64"
-          />
-          <button
-            onClick={addSection}
-            className="bg-yellow2 text-black font-semibold px-4 py-2 rounded hover:bg-Blue2 hover:text-white transition"
-          >
-            Add Section
-          </button>
-        </div>
-
-        {sections.length === 0 ? (
-          <p className="text-gray-500">No sections yet. Add one above!</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sections.map((section) => (
-              <SectionCard
-                key={section.id}
-                section={section}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-xl">
+            <h2 className="text-lg font-bold mb-4">Confirm Logout</h2>
+            <p className="text-gray-600 mb-6">Are you sure you want to log out?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowLogout(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
                 onClick={async () => {
-                  setCurrentSection(section);
-                  await loadStudents(section.id);
+                  await supabase.auth.signOut();
+                  navigate("/");
                 }}
-                onDelete={() => deleteSection(section.id)}
-                onUpdate={(newName) => updateSection(section.id, newName)}
-              />
-            ))}
+                className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors"
+              >
+                Log Out
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="flex-1 p-6">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <h1 className="text-3xl font-bold text-gray-800">My Sections</h1>
+            <button
+              onClick={fetchData}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+          
+          {/* Status Messages */}
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+              {success}
+            </div>
+          )}
+        </div>
+
+        {/* Filters Section */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-700">Filters</h2>
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={clearFilters}
+                className="text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1"
+              >
+                Clear all ({activeFiltersCount})
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Search Sections
+              </label>
+              <input
+                type="text"
+                placeholder="Search by name or grade..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Grade Level
+              </label>
+              <select
+                value={gradeFilter}
+                onChange={(e) => setGradeFilter(e.target.value ? Number(e.target.value) : "")}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Grades</option>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
+                  <option key={num} value={num}>
+                    Grade {num}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                School Year
+              </label>
+              <select
+                value={schoolYearFilter}
+                onChange={(e) => setSchoolYearFilter(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Years</option>
+                {schoolYears.map((sy) => (
+                  <option key={sy.id} value={sy.id}>
+                    {sy.start_date?.slice(0, 4)}-{sy.end_date?.slice(0, 4)}
+                    {sy.is_active && " (Current)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Gender
+              </label>
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Students</option>
+                <option value="Male">Male Only</option>
+                <option value="Female">Female Only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Results Summary */}
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-gray-600">
+            Showing {filteredSections.length} of {sections.length} sections
+          </p>
+          {filteredSections.length > 0 && (
+            <div className="text-sm text-gray-500">
+              Total Students: {Object.values(studentCounts).reduce((sum, count) => sum + count.total, 0)}
+            </div>
+          )}
+        </div>
+
+        {/* Sections Table */}
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          {filteredSections.length === 0 ? (
+            <div className="text-center py-12">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m8-8V4a1 1 0 00-1-1h-2a1 1 0 00-1 1v1M9 7h6" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No sections found</h3>
+              <p className="text-gray-500 mb-4">
+                {sections.length === 0 
+                  ? "You don't have any sections assigned yet." 
+                  : "Try adjusting your filters to see more results."}
+              </p>
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {["Grade Level", "Section", "School Year", "Students", "Gender Distribution", "Actions"].map((header) => (
+                      <th
+                        key={header}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b"
+                      >
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredSections.map((section) => {
+                    const sy = schoolYears.find((s) => s.id === section.school_year_id);
+                    const count = studentCounts[section.id] || { total: 0, male: 0, female: 0 };
+                    
+                    return (
+                      <tr key={section.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            Grade {section.grade_level}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                          {section.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                          {sy ? `${sy.start_date?.slice(0, 4)}-${sy.end_date?.slice(0, 4)}` : "N/A"}
+                          {sy?.is_active && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                              Active
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">
+                          {count.total}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-blue-600">♂ {count.male}</span>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-pink-600">♀ {count.female}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => navigate(`/students/${section.id}`)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-blue-500 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                            >
+                              Students
+                            </button>
+                            <button
+                              onClick={() => navigate(`/gradebook/${section.id}`)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-blue-500 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                            >
+                              Grades
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-
-      {currentSection && (
-        <SectionModal
-          section={currentSection}
-          onClose={() => setCurrentSection(null)}
-          onAddStudent={() => setShowStudentModal(true)}
-          students={currentSection.students || []}
-          selectedIds={selectedIds}
-          onSelect={() => {}}
-          onSelectAll={() => {}}
-        />
-      )}
-
-      {showStudentModal && currentSection && (
-        <StudentModal
-          selectedSection={currentSection}
-          newStudent={newStudent}
-          setNewStudent={setNewStudent}
-          addStudent={addStudent}
-          onClose={() => setShowStudentModal(false)}
-        />
-      )}
     </div>
   );
 };

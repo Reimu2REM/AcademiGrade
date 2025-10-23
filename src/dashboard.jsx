@@ -1,15 +1,16 @@
 // Dashboard.jsx
 import React, { useState, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
+import { useNavigate } from "react-router-dom";
 import supabase from "./config/supabaseclient";
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { FaRankingStar } from "react-icons/fa6";
+import { DataTable } from "primereact/datatable";
+import { Column } from "primereact/column";
+import { Dropdown } from "primereact/dropdown";
+import { FaRankingStar, FaUsers, FaChartBar } from "react-icons/fa6";
 
 // Components
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
-
 
 // Chart.js registration
 import {
@@ -33,46 +34,19 @@ ChartJS.register(
   Legend
 );
 
-const ranking = [
-  { rank: "1", name: "Juan Dela Cruz", sections: "Section A", grades: 45 },
-  { rank: "2", name: "Maria Santos", sections: "Section A", grades: 38 },
-  { rank: "3", name: "Pedro Reyes", sections: "Section A", grades: 50 },
-  { rank: "4", name: "Ana Lopez", sections: "Section A", grades: 42 },
-  { rank: "5", name: "Railey Alcaraz", sections: "Section A", grades: 42 },
-  { rank: "6", name: "John Louie Dollente", sections: "Section A", grades: 43 },
-  { rank: "7", name: "Carlo Mendoza", sections: "Section A", grades: 39 },
-  { rank: "8", name: "Sophia Cruz", sections: "Section A", grades: 47 },
-  { rank: "9", name: "Daniel Ramos", sections: "Section A", grades: 36 },
-  { rank: "10", name: "Isabella Torres", sections: "Section A", grades: 44 },
-  { rank: "11", name: "Miguel Fernandez", sections: "Section A", grades: 41 },
-  { rank: "12", name: "Angela Bautista", sections: "Section A", grades: 40 },
-  { rank: "13", name: "Christian Garcia", sections: "Section A", grades: 37 },
-  { rank: "14", name: "Katrina Villanueva", sections: "Section A", grades: 46 },
-  { rank: "15", name: "Mark Salazar", sections: "Section A", grades: 35 },
-  { rank: "16", name: "Patricia Navarro", sections: "Section A", grades: 42 },
-  { rank: "17", name: "Jason Aquino", sections: "Section A", grades: 48 },
-  { rank: "18", name: "Christine Ramos", sections: "Section A", grades: 39 },
-  { rank: "19", name: "Francis Domingo", sections: "Section A", grades: 37 },
-  { rank: "20", name: "Nicole Herrera", sections: "Section A", grades: 44 },
-  { rank: "21", name: "James Cortez", sections: "Section A", grades: 41 },
-  { rank: "22", name: "Ella Gutierrez", sections: "Section A", grades: 36 },
-  { rank: "23", name: "Adrian Castillo", sections: "Section A", grades: 45 },
-  { rank: "24", name: "Bianca Morales", sections: "Section A", grades: 43 },
-  { rank: "25", name: "Joshua Enriquez", sections: "Section A", grades: 38 },
-  { rank: "26", name: "Rafael Santos", sections: "Section A", grades: 47 },
-  { rank: "27", name: "Jasmine Lim", sections: "Section A", grades: 40 },
-  { rank: "28", name: "Kyle Vergara", sections: "Section A", grades: 42 },
-  { rank: "29", name: "Diana Cruz", sections: "Section A", grades: 39 },
-  { rank: "30", name: "Victor Ramos", sections: "Section A", grades: 46 },
-];
-
-
-
-const dashboard = () => {
-  // States
+const Dashboard = () => {
   const [visible, setVisible] = useState(false);
   const [user, setUser] = useState(null);
   const [profilePic, setProfilePic] = useState(null);
+  const [missingActivities, setMissingActivities] = useState([]);
+  const [loadingMissing, setLoadingMissing] = useState(false);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [activeSchoolYear, setActiveSchoolYear] = useState(null);
+  const [studentRankings, setStudentRankings] = useState([]);
+  const [gradeDistribution, setGradeDistribution] = useState([]);
+  const [averageGrade, setAverageGrade] = useState(0);
+
+  const navigate = useNavigate();
 
   // Load Supabase user + profile pic
   useEffect(() => {
@@ -83,135 +57,528 @@ const dashboard = () => {
       } = await supabase.auth.getUser();
       if (!error && user) setUser(user);
 
-      // Load profile pic from teachers table
-      const { data: teacherData } = await supabase
-        .from("teachers")
-        .select("profile_pic")
-        .eq("auth_id", user.id)
-        .single();
+      if (user) {
+        const { data: teacherData } = await supabase
+          .from("teachers")
+          .select("profile_pic")
+          .eq("auth_id", user.id)
+          .single();
 
-      if (teacherData?.profile_pic) setProfilePic(teacherData.profile_pic);
+        if (teacherData?.profile_pic) setProfilePic(teacherData.profile_pic);
+      }
     };
     fetchUser();
   }, []);
 
-  if (!user) return <div>Loading...</div>;
+  // ✅ Fetch active school year + total students
+  const fetchTotalStudents = async () => {
+    try {
+      // 1️⃣ Get active school year
+      const { data: activeYear, error: yearError } = await supabase
+        .from("school_years")
+        .select("id, sy_label")
+        .eq("is_active", true)
+        .single();
 
-  return (
-    <div className="grid sm:grid-cols-1 sm:grid-rows-[100px_200px_1fr_1fr] lg:grid-cols-[1fr_1fr] lg:grid-rows-[60px_240px_1fr]">
-      {/* Navbar with profile pic + logout */}
-      <Navbar
-        setVisible={setVisible}
-        user={user}
-        profilePic={profilePic}
-        setProfilePic={setProfilePic}
-      />
+      if (yearError) {
+        console.error("Error fetching school year:", yearError);
+        setTotalStudents(0);
+        return;
+      }
 
-      {/* Sidebar */}
-      <Sidebar visible={visible} setVisible={setVisible} />
+      if (!activeYear) {
+        console.warn("No active school year found");
+        setTotalStudents(0);
+        return;
+      }
 
-      {/* Dashboard Content */}
-      <div className="col-span-2 row-start-2 lg:flex lg:flex-col lg:items-center lg:h-full lg:justify-center shadow-md">
-        <h1 className="text-3xl font-bold p-1">Teacher's Dashboard</h1>
-        <h2 className="text-gray-600 m-1">Welcome, {user.email}</h2>
-        <div className="flex flex-row items-center justify-start gap-10 p-1">
-          {["Total Students", "Incomplete Students"].map(
-            (title, i) => (
-              <div
-                key={i}
-                className="h-36 w-80 shadow-2xl bg-gray-100 rounded-3xl flex flex-col items-center justify-center"
-              >
-                <h3 className="font-semibold text-lg">{title}</h3>
-                <h5 className="text-4xl font-bold">0</h5>
-              </div>
-            )
-          )}
+      setActiveSchoolYear(activeYear);
+
+      const activeYearId = activeYear.id;
+
+      // 2️⃣ Get teacher record
+      const { data: teacherData, error: teacherError } = await supabase
+        .from("teachers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (teacherError || !teacherData) {
+        console.warn("Teacher not found for this user");
+        setTotalStudents(0);
+        return;
+      }
+
+      const teacherId = teacherData.id;
+
+      // 3️⃣ Get sections assigned to this teacher for active school year
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from("subject_assignments")
+        .select("section_id")
+        .eq("teacher_id", teacherId)
+        .eq("school_year_id", activeYearId);
+
+      if (assignmentsError) throw assignmentsError;
+
+      const sectionIds = [...new Set(assignments.map((a) => a.section_id))];
+
+      if (sectionIds.length === 0) {
+        setTotalStudents(0);
+        return;
+      }
+
+      // 4️⃣ Count students from those sections
+      const { count, error: studentCountError } = await supabase
+        .from("students")
+        .select("id", { count: "exact", head: true })
+        .in("section_id", sectionIds);
+
+      if (studentCountError) throw studentCountError;
+
+      setTotalStudents(count || 0);
+    } catch (err) {
+      console.error("Error fetching total students:", err.message);
+    }
+  };
+
+  // ✅ FIXED: Fetch missing activities data (only null scores)
+const fetchMissingActivities = async () => {
+  try {
+    setLoadingMissing(true);
+    
+    // Get teacher ID first
+    const { data: teacherData, error: teacherError } = await supabase
+      .from("teachers")
+      .select("id")
+      .eq("auth_id", user.id)
+      .single();
+
+    if (teacherError || !teacherData) {
+      console.warn("Teacher not found");
+      setMissingActivities([]);
+      return;
+    }
+
+    const teacherId = teacherData.id;
+
+    // Get active school year
+    const { data: activeYear } = await supabase
+      .from("school_years")
+      .select("id")
+      .eq("is_active", true)
+      .single();
+
+    if (!activeYear) {
+      console.warn("No active school year");
+      setMissingActivities([]);
+      return;
+    }
+
+    // Get subject assignments for this teacher
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from("subject_assignments")
+      .select("id, section_id, sections(name, grade_level)")
+      .eq("teacher_id", teacherId)
+      .eq("school_year_id", activeYear.id);
+
+    if (assignmentsError) throw assignmentsError;
+
+    if (!assignments || assignments.length === 0) {
+      setMissingActivities([]);
+      return;
+    }
+
+    const assignmentIds = assignments.map(a => a.id);
+    const sectionMap = {};
+    assignments.forEach(assignment => {
+      sectionMap[assignment.section_id] = assignment.sections;
+    });
+
+    // ✅ CHANGED: Only detect NULL scores (removed 0 and empty string)
+    const { data: missingScores, error: scoresError } = await supabase
+      .from("activity_scores")
+      .select(`
+        id,
+        score,
+        student_id,
+        subject_assignment_id,
+        students!inner(
+          id,
+          section_id,
+          name
+        )
+      `)
+      .in("subject_assignment_id", assignmentIds)
+      .is("score", null); // ✅ Only NULL scores
+
+    if (scoresError) throw scoresError;
+
+    // Group by section
+    const grouped = {};
+
+    missingScores?.forEach((item) => {
+      const sectionId = item.students.section_id;
+      const sectionInfo = sectionMap[sectionId];
+      
+      if (!sectionInfo) return;
+
+      if (!grouped[sectionId]) {
+        grouped[sectionId] = {
+          sectionId,
+          sectionName: sectionInfo.name,
+          gradeLevel: sectionInfo.grade_level,
+          missingCount: 0,
+        };
+      }
+      grouped[sectionId].missingCount += 1;
+    });
+
+    const result = Object.values(grouped).sort(
+      (a, b) => b.missingCount - a.missingCount
+    );
+
+    setMissingActivities(result);
+  } catch (err) {
+    console.error("Error fetching missing activities:", err);
+  } finally {
+    setLoadingMissing(false);
+  }
+};
+  // ✅ NEW: Fetch student rankings and average grade
+  const fetchStudentRankings = async () => {
+    try {
+      // Get teacher ID
+      const { data: teacherData } = await supabase
+        .from("teachers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!teacherData) return;
+
+      // Get active school year
+      const { data: activeYear } = await supabase
+        .from("school_years")
+        .select("id")
+        .eq("is_active", true)
+        .single();
+
+      if (!activeYear) return;
+
+      // Get subject assignments
+      const { data: assignments } = await supabase
+        .from("subject_assignments")
+        .select("id")
+        .eq("teacher_id", teacherData.id)
+        .eq("school_year_id", activeYear.id);
+
+      if (!assignments || assignments.length === 0) return;
+
+      const assignmentIds = assignments.map(a => a.id);
+
+      // Get grades for these assignments
+      const { data: grades, error } = await supabase
+        .from("grades")
+        .select(`
+          final_grade,
+          students!inner(
+            id,
+            name,
+            section_id,
+            sections(name)
+          )
+        `)
+        .in("subject_assignment_id", assignmentIds)
+        .not("final_grade", "is", null)
+        .order("final_grade", { ascending: false });
+
+      if (error) throw error;
+
+      // Process rankings
+      const rankings = grades.map((grade, index) => ({
+        rank: index + 1,
+        name: grade.students.name,
+        grade: grade.final_grade ? grade.final_grade.toFixed(2) : "N/A",
+        section: grade.students.sections.name
+      }));
+
+      setStudentRankings(rankings.slice(0, 10)); // Top 10 students
+
+      // Calculate average grade
+      if (grades.length > 0) {
+        const total = grades.reduce((sum, grade) => sum + (grade.final_grade || 0), 0);
+        const average = total / grades.length;
+        setAverageGrade(average);
+      }
+
+      // Calculate grade distribution
+      const distribution = calculateGradeDistribution(grades);
+      setGradeDistribution(distribution);
+
+    } catch (err) {
+      console.error("Error fetching student rankings:", err);
+    }
+  };
+
+  // ✅ NEW: Calculate grade distribution
+  const calculateGradeDistribution = (grades) => {
+    const ranges = [
+      { label: "75-79", min: 75, max: 79, count: 0 },
+      { label: "80-84", min: 80, max: 84, count: 0 },
+      { label: "85-89", min: 85, max: 89, count: 0 },
+      { label: "90-94", min: 90, max: 94, count: 0 },
+      { label: "95-100", min: 95, max: 100, count: 0 },
+    ];
+
+    grades.forEach(grade => {
+      const finalGrade = grade.final_grade;
+      if (finalGrade) {
+        const range = ranges.find(r => finalGrade >= r.min && finalGrade <= r.max);
+        if (range) range.count++;
+      }
+    });
+
+    return ranges;
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchMissingActivities();
+      fetchTotalStudents();
+      fetchStudentRankings();
+    }
+  }, [user]);
+
+  const handleSectionClick = (sectionId) => {
+    navigate(`/subjectgrade/${sectionId}`);
+  };
+
+  // Chart data based on actual grade distribution
+  const chartData = {
+    labels: gradeDistribution.map(item => item.label),
+    datasets: [
+      {
+        label: "Number of Students",
+        data: gradeDistribution.map(item => item.count),
+        backgroundColor: [
+          "#ef4444", // 75-79: Red
+          "#f59e0b", // 80-84: Yellow
+          "#10b981", // 85-89: Green
+          "#3b82f6", // 90-94: Blue
+          "#8b5cf6", // 95-100: Purple
+        ],
+        borderColor: [
+          "#dc2626",
+          "#d97706",
+          "#047857",
+          "#1d4ed8",
+          "#7c3aed",
+        ],
+        borderWidth: 2,
+        borderRadius: 8,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    maintainAspectRatio: false,
+    responsive: true,
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { padding: 20, usePointStyle: true },
+      },
+      tooltip: {
+        backgroundColor: "rgba(0,0,0,0.8)",
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: function(context) {
+            return `Students: ${context.parsed.y}`;
+          }
+        }
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: "rgba(0,0,0,0.1)" },
+        ticks: { stepSize: 1 },
+        title: {
+          display: true,
+          text: 'Number of Students'
+        }
+      },
+      x: { 
+        grid: { display: false },
+        title: {
+          display: true,
+          text: 'Grade Ranges'
+        }
+      },
+    },
+  };
+
+  if (!user)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
+    );
 
-      {/* Charts */}
-      <div className="row-start-3 lg:h-full flex flex-col items-center border border-black ">
-        <div className=" w-[600px] rounded-lg shadow-md border border-black m-5">
-          <h1 className=" font-semibold p-5">Student Grades Gain</h1>
-          <div className="w-full h-[435px] p-5  ">
-            <Bar
-              data={{
-                labels: ["A", "B", "C"],
-                datasets: [
-                  {
-                    label: "Section 1",
-                    data: [12, 19, 3],
-                    backgroundColor: ["#3b82f6", "#06b6d4", "#f59e0b"],
-                  },
-                ],
-              }}
-              options={{
-                maintainAspectRatio: false,
-                responsive: true,
-                plugins: { legend: { position: "bottom" } },
-              }}
-              redraw
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar setVisible={setVisible} user={user} profilePic={profilePic} />
+      <Sidebar visible={visible} setVisible={setVisible} />
+
+      <main className="p-4 lg:p-6 transition-all duration-300">
+        {/* Header Section */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
+            Teacher's Dashboard
+          </h1>
+          <p className="text-gray-600 text-lg mb-4">
+            Welcome back, {user.email}
+          </p>
+
+          {/* 🔽 View-only dropdown for active school year */}
+          <div className="flex justify-center">
+            <Dropdown
+              value={activeSchoolYear}
+              options={
+                activeSchoolYear
+                  ? [{ label: activeSchoolYear.sy_label, value: activeSchoolYear }]
+                  : []
+              }
+              optionLabel="label"
+              placeholder="Active School Year"
+              className="w-64"
+              disabled
             />
           </div>
         </div>
-        
-      </div>
-      {/* Studen ranking table */}
-      <div className="row-start-3 lg:h-full flex flex-col items-center shadow-md border border-black">
-        <div className="bg-[#f1f1f1] w-[650px] m-5 h-[500px] p-5 shadow-xl rounded-lg border border-black">
-            <div className="border border-gray-300 flex justify-between rounded-md ">
-            <div className="flex flex justify-between">
-              <h1 className="text-lg font-semibold p-2">Students Ranking</h1>
-              <FaRankingStar className="text-black text-3xl" />
-            </div>
-              
-              <select name="cars" id="cars" className="bg-yellow2 m-2 border border-gray-100 rounded-md p-1">
-                <option value="" disabled selected hidden >Select Section</option>
-                <option value="volvo">Volvo</option>
-                <option value="saab">Saab</option>
-                <option value="mercedes">Mercedes</option>
-                <option value="audi">Audi</option>
-              </select>
-            </div>
-              {/* scroll container */}
-              <div className="overflow-x-auto overflow-y-auto max-h-[350px] custom-scrollbar">
-                <DataTable
-                  value={ranking}
-                  rowClassName="border shadow-sm text-center"
-                  tableClassName="min-w-full border-collapse border shadow-xl"
-                  
-                >
-                  <Column
-                    field="rank"
-                    header="Top"
-                    style={{ width: "50px", textAlign: "center" }}
-                    headerClassName="bg-Blue2 text-white border border-black pl-12"
-                  />
-                  <Column
-                    field="name"
-                    header="Name"
-                    style={{ width: "140px", textAlign: "center" }}
-                    headerClassName="bg-Blue2 text-white border border-black pl-28"
-                  />
-                  {/* <Column
-                    field="sections"
-                    header="Sections"
-                    style={{ width: "80px", textAlign: "center" }}
-                    headerClassName="bg-Blue2 text-white border border-black pl-10"
-                  /> */}
-                  <Column
-                    field="grades"
-                    header="Grades"
-                    sortable
-                    style={{ width: "80px", textAlign: "center" }}
-                    headerClassName="bg-Blue2 text-white border border-black pl-12 "
-                  />
-                </DataTable>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 max-w-6xl mx-auto">
+          {/* ✅ Total Students Card */}
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 shadow-lg transition-transform hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-600 font-semibold mb-2">
+                  Total Students
+                </h3>
+                <h2 className="text-4xl font-bold text-gray-800">
+                  {totalStudents ?? 0}
+                </h2>
               </div>
-          </div> 
-      </div>
+              <FaUsers className="text-3xl text-blue-600" />
+            </div>
+          </div>
+
+          {/* Incomplete Students Styled Like Assignments Due */}
+          <div className="bg-[#1E1E2F] text-white rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-blue-400">
+                {missingActivities.reduce(
+                  (acc, cur) => acc + cur.missingCount,
+                  0
+                )}{" "}
+                Incomplete Activities
+              </h3>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto max-h-[200px]">
+              {loadingMissing ? (
+                <p className="text-gray-400 text-sm text-center py-2">
+                  Loading...
+                </p>
+              ) : missingActivities.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-2">
+                  No incomplete tasks 🎉
+                </p>
+              ) : (
+                missingActivities.map((item) => (
+                  <div
+                    key={item.sectionId}
+                    onClick={() => handleSectionClick(item.sectionId)}
+                    className="flex justify-between items-center bg-[#2A2A3D] hover:bg-[#33334D] transition rounded-lg px-3 py-2 cursor-pointer"
+                  >
+                    <span className="text-sm truncate max-w-[180px]">
+                      Grade {item.gradeLevel} - {item.sectionName}
+                    </span>
+                    <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {item.missingCount}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Average Grade Card */}
+          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg transition-transform hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-600 font-semibold mb-2">
+                  Average Grade
+                </h3>
+                <h2 className="text-4xl font-bold text-gray-800">
+                  {averageGrade ? averageGrade.toFixed(1) + '%' : 'N/A'}
+                </h2>
+              </div>
+              <FaChartBar className="text-3xl text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Charts + Ranking */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 max-w-7xl mx-auto">
+          {/* Chart */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <FaChartBar className="text-blue-600" />
+                Student Grades Distribution
+              </h2>
+            </div>
+            <div className="h-80">
+              {gradeDistribution.some(item => item.count > 0) ? (
+                <Bar data={chartData} options={chartOptions} />
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  No grade data available yet
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Ranking Table */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-6">
+              <FaRankingStar className="text-yellow-500" />
+              Top Students Ranking
+            </h2>
+
+            <div className="overflow-x-auto overflow-y-auto max-h-96">
+              <DataTable 
+                value={studentRankings} 
+                emptyMessage="No student data available yet"
+                className="p-datatable-sm"
+              >
+                <Column field="rank" header="Rank" style={{ width: '80px' }} />
+                <Column field="name" header="Student Name" />
+                <Column field="section" header="Section" />
+                <Column field="grade" header="Grade" />
+              </DataTable>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };
 
-export default dashboard;
+export default Dashboard;
