@@ -1,0 +1,27 @@
+/* === Custom Toast Colors === */
+.p-toast-message-success {
+  background-color: #22c55e !important;
+  color: white !important;
+  padding: 10px;
+  font-weight: bold;
+  border-radius: 10px
+}
+
+.p-toast-message-error {
+  background-color: #ef4444 !important;
+  color: white !important;
+}
+
+.p-toast-message-info {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+
+.p-toast-message-warn {
+  background-color: #f59e0b !important;
+  color: black !important;
+  padding: 10px;
+
+  font-weight: bold;
+  border-radius: 10px
+}
