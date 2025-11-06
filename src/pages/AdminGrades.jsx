@@ -49,6 +49,7 @@ export default function AdminGrades() {
   const [curriculumGradeLevel, setCurriculumGradeLevel] = useState(null);
   const [curriculumSubjects, setCurriculumSubjects] = useState([]);
   const [newSubject, setNewSubject] = useState("");
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
 
   // --- Enhanced Curriculum States ---
   const [selectedGrades, setSelectedGrades] = useState([]);
@@ -56,6 +57,8 @@ export default function AdminGrades() {
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copySourceGrade, setCopySourceGrade] = useState(null);
   const [copyTargetGrades, setCopyTargetGrades] = useState([]);
+
+  const [bulkSubjects, setBulkSubjects] = useState("");
 
   // --- Grades Weight Modal State ---
   const [showGradesWeightModal, setShowGradesWeightModal] = useState(false);
@@ -151,7 +154,57 @@ export default function AdminGrades() {
       showToast('error', 'Error', 'Failed to load grade weights');
     }
   };
+// Bulk add function
+const handleBulkAddSubjects = () => {
+  if (!bulkSubjects.trim() || !selectedGrades.length) return;
 
+  // Parse subjects (support both new lines and commas)
+  const subjectsArray = bulkSubjects
+    .split(/[\n,]/)
+    .map(subject => subject.trim())
+    .filter(subject => subject.length > 0);
+
+  if (subjectsArray.length === 0) {
+    alert("Please enter valid subject names");
+    return;
+  }
+
+  const newSubjects = [];
+  
+  // Create combinations of subjects and grades
+  subjectsArray.forEach(subject => {
+    selectedGrades.forEach(grade => {
+      // Check if this subject already exists for this grade
+      const exists = curriculumSubjects.some(
+        s => s.subject_name.toLowerCase() === subject.toLowerCase() && 
+             s.grade_level === grade
+      );
+      
+      if (!exists) {
+        newSubjects.push({
+          subject_name: subject,
+          grade_level: grade,
+          curriculum_id: editingCurriculum.id
+        });
+      }
+    });
+  });
+
+  if (newSubjects.length === 0) {
+    alert("All subjects already exist for the selected grades");
+    return;
+  }
+
+  // Add new subjects
+  setCurriculumSubjects([...curriculumSubjects, ...newSubjects]);
+  
+  // Clear the form
+  setBulkSubjects("");
+  setSelectedGrades([]);
+  
+  // Show success message
+  alert(`Successfully added ${newSubjects.length} subject entries`);
+};
   // Handle weight changes
   const handleWeightChange = (field, value) => {
     setWeightForm(prev => ({
@@ -1303,143 +1356,160 @@ export default function AdminGrades() {
           </div>
         </Dialog>
 
-        {/* --- Enhanced Curriculum Management Modal --- */}
-        <Dialog
-          header={
-            <div className="flex items-center gap-2">
-              <i className="pi pi-book text-purple-500"></i>
-              <span>{editingCurriculum ? `Edit Curriculum: ${editingCurriculum.name}` : "Curriculum Management"}</span>
-            </div>
-          }
-          visible={showCurriculumModal}
-          onHide={() => { setShowCurriculumModal(false); setEditingCurriculum(null); setCurriculumSubjects([]); }}
-          className="w-11/12 md:w-10/12 lg:w-9/12 bg-white p-4 rounded-xl shadow-2xl"
-          modal
-        >
-          {!editingCurriculum ? (
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <InputText
-                  value={curriculumName}
-                  onChange={(e) => setCurriculumName(e.target.value)}
-                  placeholder="Enter curriculum name (e.g., K-12 Basic Education)"
-                  className="w-full p-2 rounded-md font-semibold border border-gray-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none"
-                />
-                <Button
-                  label="Add Curriculum"
-                  icon="pi pi-plus"
-                  className="w-48 bg-blue-600 hover:bg-blue-700 border-0 p-2 text-gray-50 font-semibold rounded-md"
-                  onClick={addCurriculum}
-                  loading={saving}
-                />
-              </div>
+     {/* --- Enhanced Curriculum Management Modal --- */}
+<Dialog
+  header={
+    <div className="flex items-center gap-2">
+      <i className="pi pi-book text-purple-500"></i>
+      <span>{editingCurriculum ? `Edit Curriculum: ${editingCurriculum.name}` : "Curriculum Management"}</span>
+    </div>
+  }
+  visible={showCurriculumModal}
+  onHide={() => { 
+    setShowCurriculumModal(false); 
+    setEditingCurriculum(null); 
+    setCurriculumSubjects([]); 
+    setBulkSubjects(""); 
+    setSelectedGrades([]);
+  }}
+  className="w-11/12 md:w-10/12 lg:w-9/12 bg-white p-4 rounded-xl shadow-2xl"
+  modal
+>
+  {!editingCurriculum ? (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <InputText
+          value={curriculumName}
+          onChange={(e) => setCurriculumName(e.target.value)}
+          placeholder="Enter curriculum name (e.g., K-12 Basic Education)"
+          className="w-full p-2 rounded-md font-semibold border border-gray-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none"
+        />
+        <Button
+          label="Add Curriculum"
+          icon="pi pi-plus"
+          className="w-48 bg-blue-600 hover:bg-blue-700 border-0 p-2 text-gray-50 font-semibold rounded-md"
+          onClick={addCurriculum}
+          loading={saving}
+        />
+      </div>
 
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Curriculum Name</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Total Subjects</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Status</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {curriculums.map((cur) => (
-                      <tr key={cur.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{cur.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{cur.curriculum_subjects?.length || 0} subjects</td>
-                        <td className="px-4 py-3 text-sm">
-                          {cur.is_active ? (
-                            <Badge value="Active" severity="success" />
-                          ) : (
-                            <Button
-                              label="Set Active"
-                              className="p-button-text p-button-sm text-blue-600"
-                              onClick={() => setActiveCurriculum(cur.id)}
-                            />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <Button
-                            icon="pi pi-pencil"
-                            className="p-button-warning p-button-sm text-blue-600"
-                            tooltip="Edit Curriculum Subjects"
-                            onClick={() => editCurriculum(cur)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            // Enhanced Edit Curriculum View
-            <div className="space-y-4">
-              {/* Quick Actions Header */}
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-blue-50 rounded-lg">
-                <div>
-                  <h3 className="font-semibold text-blue-800">Grade Level Subject Management</h3>
-                  <p className="text-sm text-blue-600">Add subjects efficiently across multiple grades</p>
-                </div>
-                <div className="flex gap-2">
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Curriculum Name</th>
+              <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Total Subjects</th>
+              <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium bg-yellow-300 text-black">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {curriculums.map((cur) => (
+              <tr key={cur.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">{cur.name}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{cur.curriculum_subjects?.length || 0} subjects</td>
+                <td className="px-4 py-3 text-sm">
+                  {cur.is_active ? (
+                    <Badge value="Active" severity="success" />
+                  ) : (
+                    <Button
+                      label="Set Active"
+                      className="p-button-text p-button-sm text-blue-600"
+                      onClick={() => setActiveCurriculum(cur.id)}
+                    />
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm">
                   <Button
-                    label="Back to List"
-                    icon="pi pi-arrow-left"
-                    className="bg-white text-blue-700 border border-blue-300 p-2 rounded-md"
-                    onClick={() => setEditingCurriculum(null)}
+                    icon="pi pi-pencil"
+                    className="p-button-warning p-button-sm text-blue-600"
+                    tooltip="Edit Curriculum Subjects"
+                    onClick={() => editCurriculum(cur)}
                   />
-                  <Button
-                    label="Save All Changes"
-                    icon="pi pi-save"
-                    className="bg-blue-600 hover:bg-blue-700 border-0 p-2 text-gray-50 rounded-md"
-                    onClick={saveCurriculumSubjects}
-                    loading={saving}
-                  />
-                </div>
-              </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  ) : (
+    // Enhanced Edit Curriculum View
+    <div className="space-y-4">
+      {/* Quick Actions Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-blue-50 rounded-lg">
+        <div>
+          <h3 className="font-semibold text-blue-800">Grade Level Subject Management</h3>
+          <p className="text-sm text-blue-600">Manage subjects efficiently across multiple grades</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            label="Back to List"
+            icon="pi pi-arrow-left"
+            className="bg-white text-blue-700 border border-blue-300 p-2 rounded-md"
+            onClick={() => setEditingCurriculum(null)}
+          />
+          <Button
+            label="Save All Changes"
+            icon="pi pi-save"
+            className="bg-blue-600 hover:bg-blue-700 border-0 p-2 text-gray-50 rounded-md"
+            onClick={saveCurriculumSubjects}
+            loading={saving}
+          />
+        </div>
+      </div>
 
-              {/* Bulk Subject Addition */}
-              <Card className="shadow-sm border-0">
-                <div className="p-4">
-                  <h4 className="font-semibold text-gray-700 mb-3">Quick Add Subjects to Multiple Grades</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="md:col-span-2">
-                      <InputText
-                        value={newSubject}
-                        onChange={(e) => setNewSubject(e.target.value)}
-                        placeholder="Enter subject name (e.g., Mathematics, Science)"
-                        className="w-full p-2 rounded-md border border-gray-300 focus:border-blue-500"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && newSubject.trim()) {
-                            handleQuickAddSubject();
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        label="Add to Selected"
-                        icon="pi pi-plus"
-                        className="flex-1 bg-green-600 hover:bg-green-700 border-0 p-2 text-white rounded-md"
-                        onClick={handleQuickAddSubject}
-                        disabled={!newSubject.trim() || !selectedGrades.length}
-                      />
+      {/* Two-Column Layout: Bulk Operations + Grade Level Management */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left Column - Bulk Operations (Sidebar) */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Collapsible Bulk Subject Addition */}
+          <Card className="shadow-sm border-0">
+            <div 
+              className="p-4 cursor-pointer bg-gray-50 hover:bg-gray-100 rounded-t-lg flex justify-between items-center"
+              onClick={() => setShowBulkAdd(!showBulkAdd)}
+            >
+              <div className="flex items-center gap-2">
+                <i className="pi pi-bolt text-green-600"></i>
+                <h4 className="font-semibold text-gray-700">Bulk Add Subjects</h4>
+              </div>
+              <i className={`pi ${showBulkAdd ? 'pi-chevron-down' : 'pi-chevron-right'} text-gray-500`}></i>
+            </div>
+            
+            {showBulkAdd && (
+              <div className="p-4 border-t">
+                <p className="text-sm text-gray-600 mb-3">Add multiple subjects to multiple grades at once</p>
+                
+                <div className="space-y-3">
+                  {/* Multiple Subjects Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Subjects (one per line or comma-separated):
+                    </label>
+                    <textarea
+                      value={bulkSubjects}
+                      onChange={(e) => setBulkSubjects(e.target.value)}
+                      placeholder={`Mathematics\nScience\nEnglish\nFilipino`}
+                      rows={4}
+                      className="w-full p-2 rounded-md border border-gray-300 focus:border-green-500 resize-none text-sm"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Enter one subject per line</span>
+                      <span>{bulkSubjects.split(/[\n,]/).filter(s => s.trim()).length} subjects</span>
                     </div>
                   </div>
                   
-                  {/* Grade Level Selection for Bulk Add */}
-                  <div className="mt-3">
+                  {/* Grade Level Selection */}
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Grade Levels for Bulk Addition:
+                      Select Target Grades:
                     </label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="max-h-32 overflow-y-auto border rounded-md p-2 bg-gray-50">
                       {gradeLevels.map(grade => (
-                        <div key={grade.id} className="flex items-center">
+                        <div key={grade.id} className="flex items-center py-1">
                           <input
                             type="checkbox"
-                            id={`grade-${grade.id}`}
+                            id={`bulk-grade-${grade.id}`}
                             checked={selectedGrades.includes(grade.name)}
                             onChange={(e) => {
                               if (e.target.checked) {
@@ -1448,16 +1518,18 @@ export default function AdminGrades() {
                                 setSelectedGrades(selectedGrades.filter(g => g !== grade.name));
                               }
                             }}
-                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="mr-2 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
                           />
-                          <label htmlFor={`grade-${grade.id}`} className="text-sm text-gray-700">
+                          <label htmlFor={`bulk-grade-${grade.id}`} className="text-sm text-gray-700">
                             Grade {grade.name}
                           </label>
                         </div>
                       ))}
+                    </div>
+                    <div className="flex gap-1 mt-2">
                       <Button
                         label="Select All"
-                        className="p-button-text p-button-sm text-blue-600 text-xs"
+                        className="p-button-text p-button-sm text-green-600 text-xs"
                         onClick={() => setSelectedGrades(gradeLevels.map(g => g.name))}
                       />
                       <Button
@@ -1467,223 +1539,296 @@ export default function AdminGrades() {
                       />
                     </div>
                   </div>
-                </div>
-              </Card>
 
-              {/* Grade Level Tabs for Individual Management */}
-              <Card className="shadow-sm border-0">
-                <div className="border-b">
-                  <div className="flex overflow-x-auto">
-                    {gradeLevels.map(grade => (
-                      <button
-                        key={grade.id}
-                        className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${
-                          curriculumGradeLevel?.id === grade.id
-                            ? 'border-blue-500 text-blue-600 bg-blue-50'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                        onClick={() => setCurriculumGradeLevel(grade)}
-                      >
-                        Grade {grade.name}
-                        <span className="ml-2 bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
-                          {curriculumSubjects.filter(s => s.grade_level === grade.name).length}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Subject Management for Selected Grade */}
-                {curriculumGradeLevel && (
-                  <div className="p-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="font-semibold text-gray-700">
-                        Subjects for Grade {curriculumGradeLevel.name}
-                        <span className="text-sm font-normal text-gray-500 ml-2">
-                          ({curriculumSubjects.filter(s => s.grade_level === curriculumGradeLevel.name).length} subjects)
-                        </span>
-                      </h4>
-                      
-                      {/* Quick Actions for Current Grade */}
-                      <div className="flex gap-2">
-                        <Button
-                          icon="pi pi-download"
-                          className="p-button-outlined p-button-sm"
-                          tooltip="Import from template"
-                          onClick={handleImportFromTemplate}
-                        />
-                        <Button
-                          icon="pi pi-copy"
-                          className="p-button-outlined p-button-sm"
-                          tooltip="Copy from another grade"
-                          onClick={() => setShowCopyModal(true)}
-                        />
+                  {/* Preview and Action */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                    <div className="text-sm text-yellow-800">
+                      <div className="font-medium mb-1">Preview:</div>
+                      <div className="text-xs">
+                        {bulkSubjects.trim() && selectedGrades.length > 0 ? (
+                          <>
+                            Adding <strong>{bulkSubjects.split(/[\n,]/).filter(s => s.trim()).length} subjects</strong> to{' '}
+                            <strong>{selectedGrades.length} grades</strong> ={' '}
+                            <strong>{bulkSubjects.split(/[\n,]/).filter(s => s.trim()).length * selectedGrades.length} total entries</strong>
+                          </>
+                        ) : (
+                          "Enter subjects and select grades to see preview"
+                        )}
                       </div>
                     </div>
-
-                    {/* Subject List with Quick Actions */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
-                      {curriculumSubjects
-                        .filter(s => s.grade_level === curriculumGradeLevel.name)
-                        .map((subj, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 border rounded-lg bg-white hover:bg-gray-50 group"
-                          >
-                            <span className="font-medium text-gray-700 flex items-center">
-                              <i className="pi pi-book mr-2 text-blue-500"></i>
-                              {subj.subject_name}
-                            </span>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button
-                                icon="pi pi-copy"
-                                className="p-button-text p-button-sm text-blue-600"
-                                tooltip="Copy to other grades"
-                                onClick={() => handleCopySubjectToGrades(subj.subject_name)}
-                              />
-                              <Button
-                                icon="pi pi-times"
-                                className="p-button-text p-button-sm text-red-600"
-                                onClick={() => setCurriculumSubjects(curriculumSubjects.filter(s => s !== subj))}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-
-                    {/* Empty State */}
-                    {curriculumSubjects.filter(s => s.grade_level === curriculumGradeLevel.name).length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        <i className="pi pi-inbox text-4xl mb-3"></i>
-                        <p>No subjects added for this grade level</p>
-                        <p className="text-sm">Use the bulk add above or add individually below</p>
-                      </div>
-                    )}
-
-                    {/* Quick Add for Current Grade Only */}
-                    <div className="flex gap-2 mt-4">
-                      <InputText
-                        value={currentGradeSubject}
-                        onChange={(e) => setCurrentGradeSubject(e.target.value)}
-                        placeholder={`Add subject for Grade ${curriculumGradeLevel.name}...`}
-                        className="flex-1 p-2 rounded-md border border-gray-300 focus:border-blue-500"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && currentGradeSubject.trim()) {
-                            handleAddToCurrentGrade();
-                          }
-                        }}
-                      />
-                      <Button
-                        label="Add to This Grade"
-                        icon="pi pi-plus"
-                        className="bg-blue-600 hover:bg-blue-700 border-0 p-2 text-white rounded-md"
-                        onClick={handleAddToCurrentGrade}
-                        disabled={!currentGradeSubject.trim()}
-                      />
-                    </div>
                   </div>
-                )}
-              </Card>
 
-              {/* Summary Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-center">
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {curriculumSubjects.length}
-                  </div>
-                  <div className="text-sm text-gray-600">Total Subjects</div>
+                  <Button
+                    label={`Add ${bulkSubjects.split(/[\n,]/).filter(s => s.trim()).length * selectedGrades.length} Entries`}
+                    icon="pi pi-plus"
+                    className="w-full bg-green-600 hover:bg-green-700 border-0 p-2 text-white rounded-md font-semibold"
+                    onClick={handleBulkAddSubjects}
+                    disabled={!bulkSubjects.trim() || !selectedGrades.length}
+                  />
                 </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
+              </div>
+            )}
+          </Card>
+
+          {/* Quick Actions Card */}
+          <Card className="shadow-sm border-0">
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <i className="pi pi-copy text-blue-600"></i>
+                <h4 className="font-semibold text-gray-700">Quick Actions</h4>
+              </div>
+              
+              <div className="space-y-2">
+                <Button
+                  label="Copy Subjects Between Grades"
+                  icon="pi pi-copy"
+                  className="w-full justify-start bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                  onClick={() => setShowCopyModal(true)}
+                />
+                <Button
+                  label="Clear All Subjects"
+                  icon="pi pi-trash"
+                  className="w-full justify-start bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to clear ALL subjects from ALL grades?')) {
+                      setCurriculumSubjects([]);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Summary Statistics */}
+          <Card className="shadow-sm border-0">
+            <div className="p-4">
+              <h4 className="font-semibold text-gray-700 mb-3">Summary</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total Subjects:</span>
+                  <span className="font-semibold text-blue-600">{curriculumSubjects.length}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Unique Subjects:</span>
+                  <span className="font-semibold text-green-600">
                     {new Set(curriculumSubjects.map(s => s.subject_name)).size}
-                  </div>
-                  <div className="text-sm text-gray-600">Unique Subjects</div>
+                  </span>
                 </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Grades Covered:</span>
+                  <span className="font-semibold text-purple-600">
                     {gradeLevels.filter(grade => 
                       curriculumSubjects.some(s => s.grade_level === grade.name)
                     ).length}
-                  </div>
-                  <div className="text-sm text-gray-600">Grades Covered</div>
+                  </span>
                 </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Most in One Grade:</span>
+                  <span className="font-semibold text-orange-600">
                     {Math.max(...gradeLevels.map(grade => 
                       curriculumSubjects.filter(s => s.grade_level === grade.name).length
                     ), 0)}
-                  </div>
-                  <div className="text-sm text-gray-600">Most in One Grade</div>
+                  </span>
                 </div>
               </div>
             </div>
-          )}
-        </Dialog>
+          </Card>
+        </div>
 
-        {/* Copy Subjects Modal */}
-        <Dialog
-          header="Copy Subjects Between Grades"
-          visible={showCopyModal}
-          onHide={() => { setShowCopyModal(false); setCopySourceGrade(null); setCopyTargetGrades([]); }}
-          className="w-11/12 md:w-6/12"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Copy From Grade:</label>
-              <Dropdown
-                value={copySourceGrade}
-                options={gradeLevels}
-                onChange={(e) => setCopySourceGrade(e.value)}
-                optionLabel="name"
-                placeholder="Select source grade"
-                className="w-full"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Copy To Grades:</label>
-              <div className="flex flex-wrap gap-2">
-                {gradeLevels
-                  .filter(grade => grade.name !== copySourceGrade?.name)
-                  .map(grade => (
-                    <div key={grade.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`copy-grade-${grade.id}`}
-                        checked={copyTargetGrades.includes(grade.name)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setCopyTargetGrades([...copyTargetGrades, grade.name]);
-                          } else {
-                            setCopyTargetGrades(copyTargetGrades.filter(g => g !== grade.name));
-                          }
-                        }}
-                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`copy-grade-${grade.id}`} className="text-sm text-gray-700">
-                        Grade {grade.name}
-                      </label>
-                    </div>
-                  ))}
+        {/* Right Column - Grade Level Management */}
+        <div className="lg:col-span-2">
+          <Card className="shadow-sm border-0 h-full">
+            {/* Grade Level Tabs */}
+            <div className="border-b">
+              <div className="flex overflow-x-auto">
+                {gradeLevels.map(grade => (
+                  <button
+                    key={grade.id}
+                    className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${
+                      curriculumGradeLevel?.id === grade.id
+                        ? 'border-blue-500 text-blue-600 bg-blue-50'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                    onClick={() => setCurriculumGradeLevel(grade)}
+                  >
+                    Grade {grade.name}
+                    <span className="ml-2 bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
+                      {curriculumSubjects.filter(s => s.grade_level === grade.name).length}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button
-                label="Cancel"
-                className="p-button-text"
-                onClick={() => setShowCopyModal(false)}
-              />
-              <Button
-                label="Copy Subjects"
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={handleCopyFromGrade}
-                disabled={!copySourceGrade || copyTargetGrades.length === 0}
-              />
-            </div>
-          </div>
-        </Dialog>
+            {/* Subject Management for Selected Grade */}
+            {curriculumGradeLevel && (
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-700">
+                      Grade {curriculumGradeLevel.name} Subjects
+                    </h4>
+                    <p className="text-sm text-gray-500">
+                      {curriculumSubjects.filter(s => s.grade_level === curriculumGradeLevel.name).length} subjects
+                    </p>
+                  </div>
+                  
+                  {/* Quick Subject Addition for Current Grade */}
+                  <div className="flex gap-2 w-96">
+                    <InputText
+                      value={currentGradeSubject}
+                      onChange={(e) => setCurrentGradeSubject(e.target.value)}
+                      placeholder={`Add subject to Grade ${curriculumGradeLevel.name}...`}
+                      className="flex-1 p-2 rounded-md border border-gray-300 focus:border-blue-500"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && currentGradeSubject.trim()) {
+                          handleAddToCurrentGrade();
+                        }
+                      }}
+                    />
+                    <Button
+                      icon="pi pi-plus"
+                      className="bg-blue-600 hover:bg-blue-700 border-0 p-2 text-white rounded-md"
+                      onClick={handleAddToCurrentGrade}
+                      disabled={!currentGradeSubject.trim()}
+                      tooltip={`Add to Grade ${curriculumGradeLevel.name}`}
+                    />
+                  </div>
+                </div>
 
+                {/* Subject List */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+                  {curriculumSubjects
+                    .filter(s => s.grade_level === curriculumGradeLevel.name)
+                    .map((subj, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 border rounded-lg bg-white hover:bg-gray-50 group transition-colors"
+                      >
+                        <span className="font-medium text-gray-700 flex items-center">
+                          <i className="pi pi-book mr-2 text-blue-500"></i>
+                          {subj.subject_name}
+                        </span>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            icon="pi pi-copy"
+                            className="p-button-text p-button-sm text-blue-600"
+                            tooltip="Copy to other grades"
+                            onClick={() => handleCopySubjectToGrades(subj.subject_name)}
+                          />
+                          <Button
+                            icon="pi pi-times"
+                            className="p-button-text p-button-sm text-red-600"
+                            onClick={() => setCurriculumSubjects(curriculumSubjects.filter(s => s !== subj))}
+                            tooltip="Remove subject"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Empty State */}
+                {curriculumSubjects.filter(s => s.grade_level === curriculumGradeLevel.name).length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <i className="pi pi-inbox text-4xl mb-3 text-gray-300"></i>
+                    <p className="font-medium">No subjects for this grade level</p>
+                    <p className="text-sm mt-1">Use the bulk add panel or add a subject above</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    </div>
+  )}
+</Dialog>
+
+{/* Copy Subjects Modal */}
+<Dialog
+  header="Copy Subjects Between Grades"
+  visible={showCopyModal}
+  onHide={() => { setShowCopyModal(false); setCopySourceGrade(null); setCopyTargetGrades([]); }}
+  className="w-11/12 md:w-6/12"
+>
+  <div className="space-y-4">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">Copy From Grade:</label>
+      <Dropdown
+        value={copySourceGrade}
+        options={gradeLevels}
+        onChange={(e) => setCopySourceGrade(e.value)}
+        optionLabel="name"
+        placeholder="Select source grade"
+        className="w-full"
+      />
+    </div>
+    
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">Copy To Grades:</label>
+      <div className="max-h-40 overflow-y-auto border rounded-md p-3 bg-gray-50">
+        <div className="grid grid-cols-2 gap-2">
+          {gradeLevels
+            .filter(grade => grade.name !== copySourceGrade?.name)
+            .map(grade => (
+              <div key={grade.id} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={`copy-grade-${grade.id}`}
+                  checked={copyTargetGrades.includes(grade.name)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setCopyTargetGrades([...copyTargetGrades, grade.name]);
+                    } else {
+                      setCopyTargetGrades(copyTargetGrades.filter(g => g !== grade.name));
+                    }
+                  }}
+                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor={`copy-grade-${grade.id}`} className="text-sm text-gray-700">
+                  Grade {grade.name}
+                </label>
+              </div>
+            ))}
+        </div>
+      </div>
+      <div className="flex gap-1 mt-2">
+        <Button
+          label="Select All"
+          className="p-button-text p-button-sm text-blue-600 text-xs"
+          onClick={() => setCopyTargetGrades(gradeLevels.filter(g => g.name !== copySourceGrade?.name).map(g => g.name))}
+        />
+        <Button
+          label="Clear All"
+          className="p-button-text p-button-sm text-gray-600 text-xs"
+          onClick={() => setCopyTargetGrades([])}
+        />
+      </div>
+    </div>
+
+    {copySourceGrade && (
+      <div className="bg-blue-50 p-3 rounded-md">
+        <p className="text-sm text-blue-700">
+          This will copy <strong>{curriculumSubjects.filter(s => s.grade_level === copySourceGrade.name).length} subjects</strong> from Grade {copySourceGrade.name} to {copyTargetGrades.length} selected grade{copyTargetGrades.length !== 1 ? 's' : ''}.
+        </p>
+      </div>
+    )}
+
+    <div className="flex justify-end gap-2">
+      <Button
+        label="Cancel"
+        className="p-button-text"
+        onClick={() => setShowCopyModal(false)}
+      />
+      <Button
+        label="Copy Subjects"
+        className="bg-blue-600 hover:bg-blue-700"
+        onClick={handleCopyFromGrade}
+        disabled={!copySourceGrade || copyTargetGrades.length === 0}
+      />
+    </div>
+  </div>
+</Dialog>
         {/* --- Grades Weight Modal --- */}
         <Dialog
           header={
