@@ -1098,20 +1098,20 @@ const SubjectGrade = () => {
                 <Button
                   label="Add Activity"
                   icon="pi pi-plus"
-                  className="p-button-success"
+                  className="p-button-success bg-blue-500 p-2 text-white rounded-xl "
                   onClick={() => setActivityModal(true)}
                 />
                 <Button
-                  label={saving ? "Saving..." : "Save Grades"}
+                  label={saving ? "Saving..." : "Submit to Adviser"}
                   icon="pi pi-save"
-                  className="p-button-primary"
+                  className="p-button-success bg-blue-500 p-2 text-white rounded-xl "
                   onClick={handleSaveFinalGrades}
                   disabled={saving}
                 />
                 <Button
                   label="Print"
                   icon="pi pi-print"
-                  className="p-button-help"
+                  className="p-button-success bg-blue-500 p-2 text-white rounded-xl "
                   onClick={() => window.print()}
                 />
               </div>
@@ -1123,12 +1123,12 @@ const SubjectGrade = () => {
         <div className="flex flex-wrap justify-between items-center gap-4 mb-6 p-4 bg-white rounded-lg shadow">
           <div className="flex flex-wrap items-center gap-3">
             <span className="p-input-icon-left">
-              <i className="pi pi-search" />
+              
               <InputText
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search by name or LRN..."
-                className="w-64"
+                className="w-64  border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </span>
             <Dropdown
@@ -1136,7 +1136,8 @@ const SubjectGrade = () => {
               options={sortOptions}
               onChange={(e) => setSortOption(e.value)}
               placeholder="Sort by"
-              className="w-32"
+              className="w-32 border border-gray-300 rounded-lg px-3 py-2 "
+              panelClassName="bg-white p-2 shadow-lg border border-gray-200 rounded-lg"
             />
           </div>
           <div className="flex items-center gap-3">
@@ -1146,7 +1147,8 @@ const SubjectGrade = () => {
               options={subjectAssignments.map(sa => ({ label: sa.subject_name, value: sa.id }))}
               onChange={(e) => setSelectedSubjectAssignmentId(e.value)}
               placeholder="Select Subject"
-              className="w-48"
+              className="w-48 border border-gray-300 rounded-lg px-3 py-2 "
+              panelClassName="bg-white p-2 shadow-lg border border-gray-200 rounded-lg"
             />
           </div>
           <div className="flex items-center gap-3">
@@ -1155,7 +1157,8 @@ const SubjectGrade = () => {
               value={selectedQuarter}
               options={quarterOptions}
               onChange={(e) => setSelectedQuarter(e.value)}
-              className="w-40"
+              className="w-40 border border-gray-300 rounded-lg px-3 py-2 "
+              panelClassName="bg-white p-2 shadow-lg border border-gray-200 rounded-lg"
             />
           </div>
         </div>
@@ -1203,7 +1206,7 @@ const SubjectGrade = () => {
                   <React.Fragment key={key}>
                     {category?.items?.map((item) => (
                       <th key={item.id} className="border border-gray-500 px-2 py-2">
-                        <div className="flex items-center justify-between cursor-pointer hover:bg-gray-100 rounded p-1">
+                        <div className="flex items-center justify-between cursor-pointer hover:bg-blue-400 hover:text-black font-semibold rounded p-1">
                           <div onClick={() => handleActivityClick(item, key)}>
                             <span className="font-medium mr-2">{item.name}</span>
                             <span className="text-xs opacity-80">({item.maxScore})</span>
@@ -1335,13 +1338,13 @@ const SubjectGrade = () => {
         header="Add New Activity"
         visible={activityModal}
         onHide={() => setActivityModal(false)}
-        className="w-11/12 md:w-1/2 lg:w-1/3"
-        contentClassName="bg-gray-900 text-white border border-gray-700"
-        headerClassName="bg-gray-800 text-white border-b border-gray-700"
+        className="w-11/12 md:w-1/2 lg:w-1/3 p-2 rounded-lg"
+        contentClassName="bg-gray-50 rounded-lg text-black border border-gray-700 "
+        headerClassName="bg-blue-700 text-white border-b border-gray-700 p-2 rounded-lg"
       >
         <div className="flex flex-col gap-4 p-4">
           <div>
-            <label className="block font-medium mb-2 text-gray-300">Activity Type:</label>
+            <label className="block font-medium mb-2 text-black font-semibold">Activity Type:</label>
             <Dropdown
               value={newActivity.type}
               options={[
@@ -1350,17 +1353,17 @@ const SubjectGrade = () => {
                 { label: "Quarterly Assessment", value: "quarterly" }
               ]}
               onChange={(e) => setNewActivity(prev => ({ ...prev, type: e.value }))}
-              className="w-full"
-              panelClassName="bg-gray-800 border border-gray-700 text-white"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              panelClassName="bg-white p-2 shadow-lg border border-gray-200 rounded-lg"
             />
           </div>
           <div>
-            <label className="block font-medium mb-2 text-gray-300">Activity Name:</label>
+            <label className="block font-semibold mb-2 text-black">Activity Name:</label>
             <InputText
               value={newActivity.name}
               onChange={(e) => setNewActivity(prev => ({ ...prev, name: e.target.value }))}
               placeholder="e.g., Quiz 1, Project Presentation"
-              className="w-full bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
+               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoFocus
             />
           </div>
@@ -1372,7 +1375,7 @@ const SubjectGrade = () => {
               min={1}
               max={1000}
               className="w-full"
-              inputClassName="bg-gray-800 border-gray-600 text-white"
+              inputClassName="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               incrementButtonClassName="bg-gray-700 text-white border-gray-600 hover:bg-gray-600"
               decrementButtonClassName="bg-gray-700 text-white border-gray-600 hover:bg-gray-600"
             />
@@ -1380,7 +1383,7 @@ const SubjectGrade = () => {
           <Button 
             label="Add Activity" 
             onClick={addActivity} 
-            className="p-button-primary bg-blue-600 hover:bg-blue-700 border-blue-600"
+            className="p-button-primary bg-blue-500 hover:bg-blue-600 border-blue-600 p-2 rounded-lg "
             disabled={!newActivity.name.trim() || newActivity.maxScore <= 0}
           />
         </div>
@@ -1394,9 +1397,9 @@ const SubjectGrade = () => {
           setActivityDetailModal(false);
           setBulkScoreValue(0);
         }}
-        className="w-11/12 md:w-3/4 lg:w-2/3"
+        className="w-11/12 md:w-3/4 lg:w-2/3 p-2 rounded-lg"
         contentClassName="bg-white"
-        headerClassName="bg-gray-800 text-white"
+        headerClassName="bg-blue-600 text-white p-2 rounded-lg"
       >
         {selectedActivity && (
           <div className="p-4">
@@ -1422,42 +1425,63 @@ const SubjectGrade = () => {
                     }
                     min={1}
                     max={1000}
-                    className="w-24"
+                    
+                    inputClassName="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      
                   />
                 </div>
               </div>
             </div>
 
             {/* Bulk Score Section */}
-            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-medium">Apply score to all students:</span>
-                <InputNumber
-                  value={bulkScoreValue}
-                  onValueChange={(e) => setBulkScoreValue(e.value)}
-                  min={0}
-                  max={selectedActivity.maxScore}
-                  className="w-24"
-                />
-                <Button
-                  label={bulkScoreValue ? "Apply to All" : "Clear All"}
-                  icon={bulkScoreValue ? "pi pi-check" : "pi pi-times"}
-                  className={bulkScoreValue ? "p-button-primary" : "p-button-danger"}
-                  onClick={() => {
-                    setSelectedActivity((prev) => ({
-                      ...prev,
-                      scores: filteredStudents.reduce(
-                        (acc, s) => ({
-                          ...acc,
-                          [s.id]: bulkScoreValue ?? "",
-                        }),
-                        {}
-                      ),
-                    }));
-                  }}
-                />
-              </div>
-            </div>
+<div className="mb-6 p-4 bg-blue-50 rounded-lg">
+  <div className="flex flex-row items-center gap-3">
+    <span className="font-medium">Apply score to all students:</span>
+    <InputNumber
+      value={bulkScoreValue}
+      onValueChange={(e) => setBulkScoreValue(e.value)}
+      min={0}
+      max={selectedActivity.maxScore}
+      inputClassName="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      
+    />
+    <Button
+      label="Apply to All"
+      icon="pi pi-check"
+      className="p-button-primary text-blue-500 underline"
+      onClick={() => {
+        setSelectedActivity((prev) => ({
+          ...prev,
+          scores: filteredStudents.reduce(
+            (acc, s) => ({
+              ...acc,
+              [s.id]: bulkScoreValue ?? "",
+            }),
+            {}
+          ),
+        }));
+      }}
+    />
+    <Button
+      label="Clear All"
+      icon="pi pi-times"
+      className="p-button-secondary text-blue-500 underline"
+      onClick={() => {
+        setSelectedActivity((prev) => ({
+          ...prev,
+          scores: filteredStudents.reduce(
+            (acc, s) => ({
+              ...acc,
+              [s.id]: "",
+            }),
+            {}
+          ),
+        }));
+        setBulkScoreValue(0);
+      }}
+    />
+  </div>
+</div>
 
             {/* Student Scores Table */}
             <div className="overflow-auto">
@@ -1563,7 +1587,7 @@ const SubjectGrade = () => {
               <Button
                 label="Cancel"
                 icon="pi pi-times"
-                className="p-button-text p-button-secondary"
+                className="p-button-text p-button-secondary bg-blue-500 p-2 rounded-lg text-white font-semibold"
                 onClick={() => {
                   setActivityDetailModal(false);
                   setBulkScoreValue(0);
@@ -1573,7 +1597,7 @@ const SubjectGrade = () => {
               <Button
                 label="Save Grades"
                 icon="pi pi-save"
-                className="p-button-primary"
+                className="p-button-primary bg-blue-500 p-2 rounded-lg text-white font-semibold hover:bg-blue-600"
                 onClick={async () => {
                   try {
                     const updates = filteredStudents.map((student) => ({

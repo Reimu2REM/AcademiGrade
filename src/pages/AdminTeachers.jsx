@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import supabase from "../config/supabaseclient";
-import { IoClose, IoSearch, IoAdd, IoArchive, IoRefresh } from "react-icons/io5";
+import { IoClose, IoSearch, IoAdd, IoArchive, IoRefresh, IoKey } from "react-icons/io5";
 import { FiUser, FiMail, FiKey, FiUserCheck } from "react-icons/fi";
 
 export default function AdminTeachers() {
@@ -12,12 +12,13 @@ export default function AdminTeachers() {
   const [schoolCode, setSchoolCode] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [fullname, setFullname] = useState("");
-  const [email, setEmail] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [creating, setCreating] = useState(false);
-  const [autoGenerate, setAutoGenerate] = useState(true);
   const [successMessage, setSuccessMessage] = useState("");
 
   // ✅ Fetch admin's school info
@@ -88,8 +89,6 @@ export default function AdminTeachers() {
   }, [schoolId]);
 
   // ✅ Helper functions
-  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  
   const generate4DigitNumber = () => Math.floor(1000 + Math.random() * 9000);
   
   const formatFullName = (name) => {
@@ -100,14 +99,34 @@ export default function AdminTeachers() {
     return `${last || ""}, ${first || ""} ${middleInitial}`.trim().replace(/\s+/g, " ");
   };
 
+  // ✅ Generate username
+  const generateUsername = () => {
+    if (!firstName && !lastName) return "";
+    
+    const first = firstName.toLowerCase().replace(/\s+/g, "");
+    const last = lastName.toLowerCase().replace(/\s+/g, "");
+    const randomDigits = generate4DigitNumber();
+    
+    return `${first}.${last}${randomDigits}`;
+  };
+
+  const handleGenerateUsername = () => {
+    const generatedUsername = generateUsername();
+    setUsername(generatedUsername);
+  };
+
   // ✅ Create teacher with Supabase Auth
   const handleCreate = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     // Validation
-    if (!fullname.trim()) {
-      setSuccessMessage("❌ Full name is required.");
+    if (!lastName.trim() || !firstName.trim()) {
+      setSuccessMessage("❌ Last name and first name are required.");
+      return;
+    }
+    if (!username.trim()) {
+      setSuccessMessage("❌ Username is required.");
       return;
     }
     if (password.length < 6) {
@@ -123,16 +142,11 @@ export default function AdminTeachers() {
       return;
     }
 
-    let finalEmail = email.trim();
-    if (autoGenerate) {
-      const [last] = fullname.trim().split(" ");
-      const formattedLast = (last || "user").toLowerCase().replace(/\s+/g, "");
-      const randomDigits = generate4DigitNumber();
-      finalEmail = `${formattedLast}${randomDigits}@academigrade.${schoolCode}`;
-    } else if (!isValidEmail(finalEmail)) {
-      setSuccessMessage("❌ Please enter a valid email.");
-      return;
-    }
+    // Combine names for database storage
+    const fullName = `${lastName.trim()}, ${firstName.trim()} ${middleName.trim()}`.trim();
+
+    // Create email from username and school code
+    const email = `${username}@academigrade.${schoolCode}`;
 
     setCreating(true);
     setSuccessMessage("");
@@ -140,7 +154,7 @@ export default function AdminTeachers() {
     try {
       // ✅ Step 1: Create Supabase Auth user
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: finalEmail,
+        email: email,
         password,
       });
 
@@ -156,8 +170,8 @@ export default function AdminTeachers() {
         .from("teachers")
         .insert([{
           auth_id: authUserId,
-          fullname: fullname.trim(),
-          email: finalEmail,
+          fullname: fullName,
+          email: email,
           school_id: schoolId,
           profile_pic: null,
           is_archived: false,
@@ -166,7 +180,7 @@ export default function AdminTeachers() {
 
       if (teacherError) throw teacherError;
 
-      const successMsg = `✅ Teacher created successfully!${autoGenerate ? ` Generated email: ${finalEmail}` : ""}`;
+      const successMsg = `✅ Teacher created successfully! Username: ${username}`;
       setSuccessMessage(successMsg);
 
       // ✅ Reset form and close modal
@@ -184,11 +198,12 @@ export default function AdminTeachers() {
   };
 
   const resetForm = () => {
-    setFullname("");
-    setEmail("");
+    setLastName("");
+    setFirstName("");
+    setMiddleName("");
+    setUsername("");
     setPassword("");
     setConfirmPassword("");
-    setAutoGenerate(true);
   };
 
   // ✅ Archive teacher
@@ -356,17 +371,20 @@ export default function AdminTeachers() {
             }}
             onSubmit={handleCreate}
             {...{
-              fullname,
-              email,
+              lastName,
+              firstName,
+              middleName,
+              username,
               password,
               confirmPassword,
               creating,
-              autoGenerate,
-              setFullname,
-              setEmail,
+              setLastName,
+              setFirstName,
+              setMiddleName,
+              setUsername,
               setPassword,
               setConfirmPassword,
-              setAutoGenerate,
+              handleGenerateUsername,
             }}
           />
         )}
@@ -481,17 +499,20 @@ function TeacherTable({ data, formatFullName, onArchive, onRestore, archived = f
 function AddTeacherModal({
   onClose,
   onSubmit,
-  fullname,
-  email,
+  lastName,
+  firstName,
+  middleName,
+  username,
   password,
   confirmPassword,
   creating,
-  autoGenerate,
-  setFullname,
-  setEmail,
+  setLastName,
+  setFirstName,
+  setMiddleName,
+  setUsername,
   setPassword,
   setConfirmPassword,
-  setAutoGenerate,
+  handleGenerateUsername,
 }) {
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -515,54 +536,80 @@ function AddTeacherModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Full Name */}
+          {/* Last Name */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <FiUser className="text-gray-400" />
-              Full Name
+              Last Name
             </label>
             <input
               type="text"
-              placeholder="LastName, FirstName MiddleName"
+              placeholder="Enter last name"
               required
-              value={fullname}
-              onChange={(e) => setFullname(e.target.value)}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             />
-            <p className="text-xs text-gray-500 mt-1">Format: LastName, FirstName MiddleName</p>
           </div>
 
-          {/* Auto-generate Email Toggle */}
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <input
-              type="checkbox"
-              id="autoGenerate"
-              checked={autoGenerate}
-              onChange={(e) => setAutoGenerate(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="autoGenerate" className="text-sm font-medium text-gray-700">
-              Auto-generate Email Address
-            </label>
-          </div>
-
-          {/* Email */}
+          {/* First Name */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <FiMail className="text-gray-400" />
-              Email Address
+              <FiUser className="text-gray-400" />
+              First Name
             </label>
             <input
-              type="email"
-              placeholder={autoGenerate ? "Email will be auto-generated" : "Enter email address"}
-              required={!autoGenerate}
-              disabled={autoGenerate}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
-                autoGenerate ? "bg-gray-100 border-gray-300 text-gray-500" : "border-gray-300"
-              }`}
+              type="text"
+              placeholder="Enter first name"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             />
+          </div>
+
+          {/* Middle Name */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <FiUser className="text-gray-400" />
+              Middle Name (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="Enter middle name"
+              value={middleName}
+              onChange={(e) => setMiddleName(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            />
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <FiUser className="text-gray-400" />
+              Username
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter username or generate one"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleGenerateUsername}
+                disabled={!firstName || !lastName}
+                className="px-4 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <IoKey className="text-lg" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {firstName && lastName ? "Click the key icon to generate username" : "Enter first and last name to generate username"}
+            </p>
           </div>
 
           {/* Password */}

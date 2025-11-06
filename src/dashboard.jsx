@@ -479,7 +479,7 @@ const fetchMissingActivities = async () => {
           </div>
 
           {/* Incomplete Students Styled Like Assignments Due */}
-          <div className="bg-[#1E1E2F] text-white rounded-2xl p-6 shadow-lg">
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 shadow-lg transition-transform hover:scale-105">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-blue-400">
                 {missingActivities.reduce(
@@ -519,7 +519,7 @@ const fetchMissingActivities = async () => {
           </div>
 
           {/* Average Grade Card */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg transition-transform hover:scale-105">
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 shadow-lg transition-transform hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-gray-600 font-semibold mb-2">
