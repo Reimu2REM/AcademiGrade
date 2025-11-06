@@ -1041,6 +1041,7 @@ const handleBulkAddSubjects = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex gap-2">
+                          {/*
                           <Button
                             icon="pi pi-eye"
                             className="p-button-info p-button-sm text-blue-600"
@@ -1048,6 +1049,7 @@ const handleBulkAddSubjects = () => {
                             tooltipOptions={{ position: 'top' }}
                             onClick={() => openViewModal(sec)}
                           />
+                          */}
                           <Button
                             icon="pi pi-pencil"
                             className="p-button-warning p-button-sm text-blue-600"
