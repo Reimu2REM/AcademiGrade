@@ -20,7 +20,9 @@ export default function Students() {
 
   const [form, setForm] = useState({
     lrn: "",
-    name: "",
+    last_name: "",
+    first_name: "",
+    middle_name: "",
     gender: "",
     date_of_birth: "",
     contact_number: "",
@@ -65,9 +67,45 @@ export default function Students() {
 
     if (error) console.error(error);
     else {
-      setStudents(data || []);
-      setFiltered(data || []);
+      // Parse the combined name field into separate components for display
+      const studentsWithParsedNames = (data || []).map(student => ({
+        ...student,
+        // Extract name parts from the combined name field
+        ...parseName(student.name)
+      }));
+      setStudents(studentsWithParsedNames);
+      setFiltered(studentsWithParsedNames);
     }
+  };
+
+  // Parse combined name into separate parts
+  const parseName = (combinedName) => {
+    if (!combinedName) return { last_name: "", first_name: "", middle_name: "" };
+    
+    // Handle format: "Last Name, First Name Middle Name"
+    const parts = combinedName.split(',').map(part => part.trim());
+    if (parts.length === 2) {
+      const last_name = parts[0];
+      const firstMiddleParts = parts[1].split(' ').filter(part => part.trim() !== '');
+      const first_name = firstMiddleParts[0] || "";
+      const middle_name = firstMiddleParts.slice(1).join(' ') || "";
+      
+      return { last_name, first_name, middle_name };
+    }
+    
+    // Fallback: if no comma, treat as single name
+    return { last_name: combinedName, first_name: "", middle_name: "" };
+  };
+
+  // Format name for display (Last Name, First Name Middle Initial)
+  const formatNameForDisplay = (student) => {
+    const middleInitial = student.middle_name ? ` ${student.middle_name.charAt(0)}.` : "";
+    return `${student.last_name}, ${student.first_name}${middleInitial}`;
+  };
+
+  // Format name for database storage
+  const formatNameForDatabase = () => {
+    return `${form.last_name}, ${form.first_name} ${form.middle_name || ""}`.trim();
   };
 
   // 🔍 Filtering and sorting
@@ -77,24 +115,48 @@ export default function Students() {
       filteredData = filteredData.filter(
         (s) =>
           s.lrn?.toLowerCase().includes(search.toLowerCase()) ||
-          s.name?.toLowerCase().includes(search.toLowerCase())
+          s.name?.toLowerCase().includes(search.toLowerCase()) ||
+          s.last_name?.toLowerCase().includes(search.toLowerCase()) ||
+          s.first_name?.toLowerCase().includes(search.toLowerCase()) ||
+          s.middle_name?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
-    if (sortBy.gender) {
+    if (sortBy.gender && sortBy.gender !== "All") {
       filteredData = filteredData.filter(
         (s) => s.gender.toLowerCase() === sortBy.gender.toLowerCase()
       );
     }
 
     if (sortBy.name === "asc") {
-      filteredData.sort((a, b) => a.name.localeCompare(b.name));
+      filteredData.sort((a, b) => {
+        const nameA = `${a.last_name} ${a.first_name} ${a.middle_name || ""}`.toLowerCase();
+        const nameB = `${b.last_name} ${b.first_name} ${b.middle_name || ""}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
     } else if (sortBy.name === "desc") {
-      filteredData.sort((a, b) => b.name.localeCompare(a.name));
+      filteredData.sort((a, b) => {
+        const nameA = `${a.last_name} ${a.first_name} ${a.middle_name || ""}`.toLowerCase();
+        const nameB = `${b.last_name} ${b.first_name} ${b.middle_name || ""}`.toLowerCase();
+        return nameB.localeCompare(nameA);
+      });
     }
 
     setFiltered(filteredData);
   }, [search, sortBy, students]);
+
+  // Handle gender sort toggle
+  const handleGenderSort = () => {
+    if (sortBy.gender === "") {
+      setSortBy({ ...sortBy, gender: "Male" });
+    } else if (sortBy.gender === "Male") {
+      setSortBy({ ...sortBy, gender: "Female" });
+    } else if (sortBy.gender === "Female") {
+      setSortBy({ ...sortBy, gender: "All" });
+    } else {
+      setSortBy({ ...sortBy, gender: "" });
+    }
+  };
 
   // 📝 Form input handler
   const handleInputChange = (key, value) => {
@@ -108,7 +170,9 @@ export default function Students() {
       if (!/^\d*$/.test(value)) return;
       if (value.length > 0 && !value.startsWith("09")) value = "09";
       if (value.length > 11) value = value.slice(0, 11);
-    } else if (key === "name" || key === "father_name" || key === "mother_name") {
+    } else if (key === "last_name" || key === "first_name" || key === "middle_name" || 
+               key === "father_name" || key === "mother_name") {
+      // Only allow letters and spaces
       if (!/^[A-Za-z\s]*$/.test(value)) return;
     }
     setForm({ ...form, [key]: value });
@@ -129,10 +193,32 @@ export default function Students() {
 
   // ✅ Validation
   const validateForm = () => {
-    if (!form.lrn || form.lrn.length !== 12) return alert("LRN must be 12 digits");
-    if (!form.name) return alert("Name is required");
-    if (!form.gender) return alert("Gender is required");
-    if (!form.date_of_birth) return alert("Date of birth is required");
+    if (!form.lrn || form.lrn.length !== 12) {
+      alert("LRN must be 12 digits");
+      return false;
+    }
+    if (!form.last_name || !form.first_name) {
+      alert("Last name and first name are required");
+      return false;
+    }
+    if (!form.gender) {
+      alert("Gender is required");
+      return false;
+    }
+    if (!form.date_of_birth) {
+      alert("Date of birth is required");
+      return false;
+    }
+    
+    // Check if LRN already exists (only for new students)
+    if (!isEditing) {
+      const existingStudent = students.find(student => student.lrn === form.lrn);
+      if (existingStudent) {
+        alert(`LRN ${form.lrn} already exists for student: ${existingStudent.name}`);
+        return false;
+      }
+    }
+    
     return true;
   };
 
@@ -141,111 +227,152 @@ export default function Students() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const studentData = { ...form, section_id };
+    const studentData = { 
+      lrn: form.lrn,
+      name: formatNameForDatabase(), // Combine names for database
+      gender: form.gender,
+      date_of_birth: form.date_of_birth,
+      contact_number: form.contact_number,
+      address: form.address,
+      father_name: form.father_name,
+      father_contact: form.father_contact,
+      mother_name: form.mother_name,
+      mother_contact: form.mother_contact,
+      section_id,
+    };
 
-    if (isEditing) {
-      const { error } = await supabase
-        .from("students")
-        .update(studentData)
-        .eq("id", editId);
-      if (error) {
-        console.error(error);
-        alert("Error updating student!");
-      } else {
+    try {
+      if (isEditing) {
+        const { error } = await supabase
+          .from("students")
+          .update(studentData)
+          .eq("id", editId);
+        if (error) throw error;
         alert("Student updated!");
         setShowModal(false);
         setIsEditing(false);
         fetchStudents();
-      }
-    } else {
-      const { error } = await supabase.from("students").insert([studentData]);
-      if (error) {
-        console.error(error);
-        alert("Error adding student!");
       } else {
-        alert("Student added!");
-        setShowModal(false);
-        fetchStudents();
+        const { error } = await supabase.from("students").insert([studentData]);
+        if (error) {
+          if (error.code === '23505') { // Unique constraint violation
+            alert(`Error: LRN ${form.lrn} already exists in the system. Please use a different LRN.`);
+          } else {
+            throw error;
+          }
+        } else {
+          alert("Student added!");
+          setShowModal(false);
+          fetchStudents();
+        }
+      }
+    } catch (error) {
+      console.error("Database error:", error);
+      if (error.code !== '23505') { // Don't show generic alert for duplicate LRN
+        alert(`Error ${isEditing ? 'updating' : 'adding'} student: ${error.message}`);
       }
     }
   };
 
   // 📄 CSV Import with Upsert (avoid duplicates by LRN)
-const handleCSVImport = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const handleCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (header) =>
-      header.trim().toLowerCase().replace(/\s+/g, "_").replace(/\ufeff/g, ""),
-    complete: async function (results) {
-      try {
-        const rows = results.data;
-        if (!rows || !rows.length) {
-          alert("❌ CSV file is empty!");
-          return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) =>
+        header.trim().toLowerCase().replace(/\s+/g, "_").replace(/\ufeff/g, ""),
+      complete: async function (results) {
+        try {
+          const rows = results.data;
+          if (!rows || !rows.length) {
+            alert("❌ CSV file is empty!");
+            return;
+          }
+
+          const data = rows
+            .map((r) => {
+              const lrn = r.lrn?.trim();
+              // Try to get separate name fields first, fallback to combined name
+              let lastName = r.last_name?.trim();
+              let firstName = r.first_name?.trim();
+              let middleName = r.middle_name?.trim();
+              const combinedName = r.name?.trim();
+              const gender = r.gender?.trim();
+              
+              if (!lrn || !gender) return null;
+
+              // If separate names not provided, parse from combined name
+              if ((!lastName || !firstName) && combinedName) {
+                const parsed = parseName(combinedName);
+                lastName = parsed.last_name;
+                firstName = parsed.first_name;
+                middleName = parsed.middle_name;
+              }
+
+              if (!lastName || !firstName) return null;
+
+              let dob = r.date_of_birth?.trim();
+              if (dob && dob.includes("/")) {
+                const [m, d, y] = dob.split("/");
+                dob = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+              }
+
+              // Combine names for database storage
+              const fullName = `${lastName}, ${firstName} ${middleName || ""}`.trim();
+
+              return {
+                lrn,
+                name: fullName, // Store combined name
+                gender,
+                date_of_birth: dob || null,
+                contact_number: r.contact_number?.trim() || "",
+                address: r.address?.trim() || "",
+                father_name: r.father_name?.trim() || "",
+                father_contact: r.father_contact?.trim() || "",
+                mother_name: r.mother_name?.trim() || "",
+                mother_contact: r.mother_contact?.trim() || "",
+                section_id,
+              };
+            })
+            .filter(Boolean);
+
+          if (!data.length) {
+            alert("❌ No valid rows found in CSV.");
+            return;
+          }
+
+          console.log("📤 Uploading to Supabase:", data);
+
+          const { error } = await supabase
+            .from("students")
+            .upsert(data, { onConflict: "lrn" }); // ✅ Upsert by LRN to handle duplicates
+
+          if (error) {
+            console.error("Supabase upsert error:", error);
+            alert("❌ Error importing data into Supabase!");
+          } else {
+            alert("✅ CSV imported successfully! Existing records were updated, new records were added.");
+            fetchStudents();
+          }
+        } catch (err) {
+          console.error("CSV Import Error:", err);
+          alert("❌ Failed to process CSV!");
         }
-
-        const data = rows
-          .map((r) => {
-            const lrn = r.lrn?.trim();
-            const name = r.name?.trim();
-            const gender = r.gender?.trim();
-            if (!lrn || !name || !gender) return null;
-
-            let dob = r.date_of_birth?.trim();
-            if (dob && dob.includes("/")) {
-              const [m, d, y] = dob.split("/");
-              dob = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-            }
-
-            return {
-              lrn,
-              name,
-              gender,
-              date_of_birth: dob || null,
-              contact_number: r.contact_number?.trim() || "",
-              address: r.address?.trim() || "",
-              father_name: r.father_name?.trim() || "",
-              father_contact: r.father_contact?.trim() || "",
-              mother_name: r.mother_name?.trim() || "",
-              mother_contact: r.mother_contact?.trim() || "",
-              section_id,
-            };
-          })
-          .filter(Boolean);
-
-        if (!data.length) {
-          alert("❌ No valid rows found in CSV.");
-          return;
-        }
-
-        console.log("📤 Uploading to Supabase:", data);
-
-        const { error } = await supabase
-          .from("students")
-          .upsert(data, { onConflict: ["lrn"] }); // ✅ Upsert by LRN
-
-        if (error) {
-          console.error("Supabase upsert error:", error);
-          alert("❌ Error importing data into Supabase!");
-        } else {
-          alert("✅ CSV imported successfully (duplicates ignored/updated)!");
-          fetchStudents();
-        }
-      } catch (err) {
-        console.error("CSV Import Error:", err);
-        alert("❌ Failed to process CSV!");
-      }
-    },
-  });
-};
-
+      },
+    });
+  };
 
   const handleEdit = (student) => {
-    setForm(student);
+    // Use the parsed name fields that we stored in state
+    setForm({
+      ...student,
+      last_name: student.last_name || "",
+      first_name: student.first_name || "",
+      middle_name: student.middle_name || "",
+    });
     setEditId(student.id);
     setIsEditing(true);
     setShowModal(true);
@@ -261,6 +388,13 @@ const handleCSVImport = (e) => {
       alert("Student deleted!");
       fetchStudents();
     }
+  };
+
+  // Get gender filter indicator
+  const getGenderFilterIndicator = () => {
+    if (sortBy.gender === "") return "";
+    if (sortBy.gender === "All") return "• All";
+    return `• ${sortBy.gender}`;
   };
 
   return (
@@ -306,7 +440,9 @@ const handleCSVImport = (e) => {
             onClick={() => {
               setForm({
                 lrn: "",
-                name: "",
+                last_name: "",
+                first_name: "",
+                middle_name: "",
                 gender: "",
                 date_of_birth: "",
                 contact_number: "",
@@ -333,36 +469,21 @@ const handleCSVImport = (e) => {
         />
       </div>
 
-      {/* Sorting Filters */}
-      <div className="flex gap-3 mb-4">
-        <select
-          className="border rounded-lg p-2"
-          onChange={(e) => setSortBy({ ...sortBy, gender: e.target.value })}
-          value={sortBy.gender}
-        >
-          <option value="">All Genders</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-        <select
-          className="border rounded-lg p-2"
-          onChange={(e) => setSortBy({ ...sortBy, name: e.target.value })}
-          value={sortBy.name}
-        >
-          <option value="">Name Sort</option>
-          <option value="asc">A → Z</option>
-          <option value="desc">Z → A</option>
-        </select>
-      </div>
-
       {/* Students Table */}
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-300 text-sm">
           <thead className="bg-gray-100">
             <tr>
               <th className="p-2 border">LRN</th>
-              <th className="p-2 border">Name</th>
-              <th className="p-2 border">Gender</th>
+              <th className="p-2 border cursor-pointer" onClick={() => setSortBy({...sortBy, name: sortBy.name === "asc" ? "desc" : "asc"})}>
+                Name {sortBy.name && (sortBy.name === "asc" ? "↑" : "↓")}
+              </th>
+              <th 
+                className="p-2 border cursor-pointer" 
+                onClick={handleGenderSort}
+              >
+                Gender {getGenderFilterIndicator()}
+              </th>
               <th className="p-2 border">Date of Birth</th>
               <th className="p-2 border">Contact</th>
               <th className="p-2 border">Address</th>
@@ -377,7 +498,7 @@ const handleCSVImport = (e) => {
             {filtered.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="p-2 border">{s.lrn}</td>
-                <td className="p-2 border">{s.name}</td>
+                <td className="p-2 border">{formatNameForDisplay(s)}</td>
                 <td className="p-2 border">{s.gender}</td>
                 <td className="p-2 border">
                   {s.date_of_birth
@@ -435,10 +556,25 @@ const handleCSVImport = (e) => {
               />
               <input
                 type="text"
-                placeholder="NAME"
-                value={form.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
+                placeholder="LAST NAME"
+                value={form.last_name}
+                onChange={(e) => handleInputChange("last_name", e.target.value)}
                 required
+                className="border rounded p-2"
+              />
+              <input
+                type="text"
+                placeholder="FIRST NAME"
+                value={form.first_name}
+                onChange={(e) => handleInputChange("first_name", e.target.value)}
+                required
+                className="border rounded p-2"
+              />
+              <input
+                type="text"
+                placeholder="MIDDLE NAME"
+                value={form.middle_name}
+                onChange={(e) => handleInputChange("middle_name", e.target.value)}
                 className="border rounded p-2"
               />
               <select
