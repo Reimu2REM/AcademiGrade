@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import supabase from "./config/supabaseclient";
 import Papa from "papaparse";
 import { IoClose } from "react-icons/io5";
+import * as XLSX from "xlsx";
 
 export default function Students() {
   const { section_id } = useParams();
@@ -67,40 +68,9 @@ export default function Students() {
 
     if (error) console.error(error);
     else {
-      // Parse the combined name field into separate components for display
-      const studentsWithParsedNames = (data || []).map(student => ({
-        ...student,
-        // Extract name parts from the combined name field
-        ...parseName(student.name)
-      }));
-      setStudents(studentsWithParsedNames);
-      setFiltered(studentsWithParsedNames);
+      setStudents(data || []);
+      setFiltered(data || []);
     }
-  };
-
-  // Parse combined name into separate parts
-  const parseName = (combinedName) => {
-    if (!combinedName) return { last_name: "", first_name: "", middle_name: "" };
-    
-    // Handle format: "Last Name, First Name Middle Name"
-    const parts = combinedName.split(',').map(part => part.trim());
-    if (parts.length === 2) {
-      const last_name = parts[0];
-      const firstMiddleParts = parts[1].split(' ').filter(part => part.trim() !== '');
-      const first_name = firstMiddleParts[0] || "";
-      const middle_name = firstMiddleParts.slice(1).join(' ') || "";
-      
-      return { last_name, first_name, middle_name };
-    }
-    
-    // Fallback: if no comma, treat as single name
-    return { last_name: combinedName, first_name: "", middle_name: "" };
-  };
-
-  // Format name for display (Last Name, First Name Middle Initial)
-  const formatNameForDisplay = (student) => {
-    const middleInitial = student.middle_name ? ` ${student.middle_name.charAt(0)}.` : "";
-    return `${student.last_name}, ${student.first_name}${middleInitial}`;
   };
 
   // Format name for database storage
@@ -115,10 +85,7 @@ export default function Students() {
       filteredData = filteredData.filter(
         (s) =>
           s.lrn?.toLowerCase().includes(search.toLowerCase()) ||
-          s.name?.toLowerCase().includes(search.toLowerCase()) ||
-          s.last_name?.toLowerCase().includes(search.toLowerCase()) ||
-          s.first_name?.toLowerCase().includes(search.toLowerCase()) ||
-          s.middle_name?.toLowerCase().includes(search.toLowerCase())
+          s.name?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
@@ -129,17 +96,9 @@ export default function Students() {
     }
 
     if (sortBy.name === "asc") {
-      filteredData.sort((a, b) => {
-        const nameA = `${a.last_name} ${a.first_name} ${a.middle_name || ""}`.toLowerCase();
-        const nameB = `${b.last_name} ${b.first_name} ${b.middle_name || ""}`.toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
+      filteredData.sort((a, b) => a.name?.localeCompare(b.name));
     } else if (sortBy.name === "desc") {
-      filteredData.sort((a, b) => {
-        const nameA = `${a.last_name} ${a.first_name} ${a.middle_name || ""}`.toLowerCase();
-        const nameB = `${b.last_name} ${b.first_name} ${b.middle_name || ""}`.toLowerCase();
-        return nameB.localeCompare(nameA);
-      });
+      filteredData.sort((a, b) => b.name?.localeCompare(a.name));
     }
 
     setFiltered(filteredData);
@@ -295,24 +254,10 @@ export default function Students() {
           const data = rows
             .map((r) => {
               const lrn = r.lrn?.trim();
-              // Try to get separate name fields first, fallback to combined name
-              let lastName = r.last_name?.trim();
-              let firstName = r.first_name?.trim();
-              let middleName = r.middle_name?.trim();
-              const combinedName = r.name?.trim();
+              const name = r.name?.trim();
               const gender = r.gender?.trim();
               
-              if (!lrn || !gender) return null;
-
-              // If separate names not provided, parse from combined name
-              if ((!lastName || !firstName) && combinedName) {
-                const parsed = parseName(combinedName);
-                lastName = parsed.last_name;
-                firstName = parsed.first_name;
-                middleName = parsed.middle_name;
-              }
-
-              if (!lastName || !firstName) return null;
+              if (!lrn || !gender || !name) return null;
 
               let dob = r.date_of_birth?.trim();
               if (dob && dob.includes("/")) {
@@ -320,12 +265,9 @@ export default function Students() {
                 dob = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
               }
 
-              // Combine names for database storage
-              const fullName = `${lastName}, ${firstName} ${middleName || ""}`.trim();
-
               return {
                 lrn,
-                name: fullName, // Store combined name
+                name: name, // Use the name as it is in CSV
                 gender,
                 date_of_birth: dob || null,
                 contact_number: r.contact_number?.trim() || "",
@@ -365,13 +307,100 @@ export default function Students() {
     });
   };
 
+  // 📊 Export to Excel with RE-IMPORTABLE formatting
+  const handleExportToExcel = () => {
+    if (filtered.length === 0) {
+      alert("No data to export!");
+      return;
+    }
+
+    try {
+      // Prepare data for Excel export - use import-compatible format
+      const excelData = filtered.map(student => ({
+        "lrn": student.lrn,
+        "name": student.name, // Use exact same field names as import
+        "gender": student.gender,
+        "date_of_birth": student.date_of_birth, // Keep in database format (YYYY-MM-DD)
+        "contact_number": student.contact_number,
+        "address": student.address,
+        "father_name": student.father_name,
+        "father_contact": student.father_contact,
+        "mother_name": student.mother_name,
+        "mother_contact": student.mother_contact,
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths for better readability
+      const colWidths = [
+        { wch: 15 }, // lrn
+        { wch: 25 }, // name
+        { wch: 10 }, // gender
+        { wch: 12 }, // date_of_birth
+        { wch: 15 }, // contact_number
+        { wch: 30 }, // address
+        { wch: 20 }, // father_name
+        { wch: 15 }, // father_contact
+        { wch: 20 }, // mother_name
+        { wch: 15 }, // mother_contact
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add header styling
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const address = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[address]) continue;
+        ws[address].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: "center", vertical: "center" }
+        };
+      }
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Students");
+
+      // Generate filename with section name and date
+      const fileName = `Students_${sectionName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Export the file
+      XLSX.writeFile(wb, fileName);
+      
+      alert(`✅ Excel file "${fileName}" downloaded successfully!`);
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      alert("❌ Failed to export Excel file!");
+    }
+  };
+
   const handleEdit = (student) => {
-    // Use the parsed name fields that we stored in state
+    // Parse the combined name back into separate fields for editing
+    const parseName = (combinedName) => {
+      if (!combinedName) return { last_name: "", first_name: "", middle_name: "" };
+      
+      const parts = combinedName.split(',').map(part => part.trim());
+      if (parts.length === 2) {
+        const last_name = parts[0];
+        const firstMiddleParts = parts[1].split(' ').filter(part => part.trim() !== '');
+        const first_name = firstMiddleParts[0] || "";
+        const middle_name = firstMiddleParts.slice(1).join(' ') || "";
+        
+        return { last_name, first_name, middle_name };
+      }
+      
+      return { last_name: combinedName, first_name: "", middle_name: "" };
+    };
+
+    const nameParts = parseName(student.name);
+    
     setForm({
       ...student,
-      last_name: student.last_name || "",
-      first_name: student.first_name || "",
-      middle_name: student.middle_name || "",
+      last_name: nameParts.last_name,
+      first_name: nameParts.first_name,
+      middle_name: nameParts.middle_name,
     });
     setEditId(student.id);
     setIsEditing(true);
@@ -425,7 +454,7 @@ export default function Students() {
         <div className="flex items-center gap-2">
           <input
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleCSVImport}
             className="hidden"
             id="csvInput"
@@ -434,8 +463,14 @@ export default function Students() {
             htmlFor="csvInput"
             className="px-4 py-2 bg-green-600 text-white rounded-lg cursor-pointer hover:bg-green-700"
           >
-            Import CSV
+            Import CSV/Excel
           </label>
+          <button
+            onClick={handleExportToExcel}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+          >
+            📊 Export To Excel
+          </button>
           <button
             onClick={() => {
               setForm({
@@ -498,7 +533,7 @@ export default function Students() {
             {filtered.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="p-2 border">{s.lrn}</td>
-                <td className="p-2 border">{formatNameForDisplay(s)}</td>
+                <td className="p-2 border">{s.name}</td>
                 <td className="p-2 border">{s.gender}</td>
                 <td className="p-2 border">
                   {s.date_of_birth
@@ -587,7 +622,6 @@ export default function Students() {
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-
               <input
                 type="date"
                 className="border rounded p-2 w-full"
@@ -596,7 +630,6 @@ export default function Students() {
                   setForm({ ...form, date_of_birth: e.target.value })
                 }
               />
-
               <input
                 type="text"
                 placeholder="CONTACT NUMBER (09XXXXXXXXX)"
