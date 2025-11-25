@@ -215,7 +215,7 @@ export default function Login() {
                 className="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-200"
                 onClick={() => alert("Forgot password functionality to be implemented")}
               >
-                Forgot password?
+               
               </button>
             </div>
 

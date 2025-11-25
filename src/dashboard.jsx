@@ -455,8 +455,9 @@ const fetchMissingActivities = async () => {
               }
               optionLabel="label"
               placeholder="Active School Year"
-              className="w-64"
-              disabled
+              className="w-40 border border-gray-300 rounded-lg px-3 py-2 "
+              panelClassName="bg-white p-2 shadow-lg border border-gray-200 rounded-lg"
+              
             />
           </div>
         </div>
@@ -504,7 +505,7 @@ const fetchMissingActivities = async () => {
                   <div
                     key={item.sectionId}
                     onClick={() => handleSectionClick(item.sectionId)}
-                    className="flex justify-between items-center bg-[#2A2A3D] hover:bg-[#33334D] transition rounded-lg px-3 py-2 cursor-pointer"
+                    className="flex justify-between items-center  hover:bg-green-200 font-semibold transition rounded-lg px-3 py-2 cursor-pointer border border-blue-300 rounded-lg "
                   >
                     <span className="text-sm truncate max-w-[180px]">
                       Grade {item.gradeLevel} - {item.sectionName}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import supabase from "./config/supabaseclient";
 import Papa from "papaparse";
-import { IoClose } from "react-icons/io5";
+import { IoClose, IoSearch, IoAdd, IoDownload, IoCloudUpload, IoBook, IoArrowBack, IoFilter, IoCaretUp, IoCaretDown } from "react-icons/io5";
 import * as XLSX from "xlsx";
 
 export default function Students() {
@@ -18,6 +18,7 @@ export default function Students() {
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
   const [sectionName, setSectionName] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
     lrn: "",
@@ -61,6 +62,7 @@ export default function Students() {
   };
 
   const fetchStudents = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from("students")
       .select("*")
@@ -71,6 +73,7 @@ export default function Students() {
       setStudents(data || []);
       setFiltered(data || []);
     }
+    setLoading(false);
   };
 
   // Format name for database storage
@@ -421,274 +424,443 @@ export default function Students() {
 
   // Get gender filter indicator
   const getGenderFilterIndicator = () => {
-    if (sortBy.gender === "") return "";
+    if (sortBy.gender === "") return <IoFilter className="inline ml-1" />;
     if (sortBy.gender === "All") return "• All";
     return `• ${sortBy.gender}`;
   };
 
+  // Get name sort indicator
+  const getNameSortIndicator = () => {
+    if (sortBy.name === "asc") return <IoCaretUp className="inline" />;
+    if (sortBy.name === "desc") return <IoCaretDown className="inline" />;
+    return <IoFilter className="inline ml-1" />;
+  };
+
   return (
-    <div className="p-6 bg-white rounded-xl shadow">
-      {/* 🔹 Header Section */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">
-          Students — {sectionName || "Loading..."}
-        </h2>
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleViewGradebook}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            📘 View Gradebook
-          </button>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-          >
-            ← Back
-          </button>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <input
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleCSVImport}
-            className="hidden"
-            id="csvInput"
-          />
-          <label
-            htmlFor="csvInput"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg cursor-pointer hover:bg-green-700"
-          >
-            Import CSV/Excel
-          </label>
-          <button
-            onClick={handleExportToExcel}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
-          >
-            📊 Export To Excel
-          </button>
-          <button
-            onClick={() => {
-              setForm({
-                lrn: "",
-                last_name: "",
-                first_name: "",
-                middle_name: "",
-                gender: "",
-                date_of_birth: "",
-                contact_number: "",
-                address: "",
-                father_name: "",
-                father_contact: "",
-                mother_name: "",
-                mother_contact: "",
-              });
-              setIsEditing(false);
-              setShowModal(true);
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            + Add Student
-          </button>
-        </div>
-        <input
-          type="text"
-          placeholder="Search LRN or Name"
-          className="border rounded-lg p-2 w-1/3"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {/* Students Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full border border-gray-300 text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2 border">LRN</th>
-              <th className="p-2 border cursor-pointer" onClick={() => setSortBy({...sortBy, name: sortBy.name === "asc" ? "desc" : "asc"})}>
-                Name {sortBy.name && (sortBy.name === "asc" ? "↑" : "↓")}
-              </th>
-              <th 
-                className="p-2 border cursor-pointer" 
-                onClick={handleGenderSort}
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="p-10">
+        {/* 🔹 Header Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Student Management</h1>
+              <p className="text-gray-600 mt-1">
+                {sectionName || "Loading..."} • {filtered.length} students
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleViewGradebook}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
               >
-                Gender {getGenderFilterIndicator()}
-              </th>
-              <th className="p-2 border">Date of Birth</th>
-              <th className="p-2 border">Contact</th>
-              <th className="p-2 border">Address</th>
-              <th className="p-2 border">Father</th>
-              <th className="p-2 border">Father Contact</th>
-              <th className="p-2 border">Mother</th>
-              <th className="p-2 border">Mother Contact</th>
-              <th className="p-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="p-2 border">{s.lrn}</td>
-                <td className="p-2 border">{s.name}</td>
-                <td className="p-2 border">{s.gender}</td>
-                <td className="p-2 border">
-                  {s.date_of_birth
-                    ? new Date(s.date_of_birth).toLocaleDateString("en-US")
-                    : ""}
-                </td>
-                <td className="p-2 border">{s.contact_number}</td>
-                <td className="p-2 border">{s.address}</td>
-                <td className="p-2 border">{s.father_name}</td>
-                <td className="p-2 border">{s.father_contact}</td>
-                <td className="p-2 border">{s.mother_name}</td>
-                <td className="p-2 border">{s.mother_contact}</td>
-                <td className="p-2 border text-center space-x-2">
-                  <button
-                    onClick={() => handleEdit(s)}
-                    className="px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleDelete(s.id)}
-                    className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                  >
-                    🗑
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                <IoBook size={18} />
+                View Gradebook
+              </button>
+              <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors shadow-sm"
+              >
+                <IoArrowBack size={18} />
+                Back
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 🔹 Action Bar */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-3">
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleCSVImport}
+                className="hidden"
+                id="csvInput"
+              />
+              <label
+                htmlFor="csvInput"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg cursor-pointer hover:bg-green-700 transition-colors shadow-sm"
+              >
+                <IoCloudUpload size={18} />
+                Import CSV
+              </label>
+              <button
+                onClick={handleExportToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+              >
+                <IoDownload size={18} />
+                Export To Excel
+              </button>
+              <button
+                onClick={() => {
+                  setForm({
+                    lrn: "",
+                    last_name: "",
+                    first_name: "",
+                    middle_name: "",
+                    gender: "",
+                    date_of_birth: "",
+                    contact_number: "",
+                    address: "",
+                    father_name: "",
+                    father_contact: "",
+                    mother_name: "",
+                    mother_contact: "",
+                  });
+                  setIsEditing(false);
+                  setShowModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <IoAdd size={18} />
+                Add Student
+              </button>
+            </div>
+
+            <div className="relative flex-1 max-w-md">
+              <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search by LRN or Name..."
+                className="pl-10 pr-4 w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 🔹 Students Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      LRN
+                    </th>
+                    <th 
+                      className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => setSortBy({...sortBy, name: sortBy.name === "asc" ? "desc" : "asc"})}
+                    >
+                      <div className="flex items-center gap-1">
+                        Name
+                        {getNameSortIndicator()}
+                      </div>
+                    </th>
+                    <th 
+                      className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={handleGenderSort}
+                    >
+                      <div className="flex items-center gap-1">
+                        Gender
+                        {getGenderFilterIndicator()}
+                      </div>
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Date of Birth
+                    </th>
+                    {/* <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Contact
+                    </th> */}
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Address
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Father
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Father Contact
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Mother
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Mother Contact
+                    </th>
+                    <th className="bg-yellow-100 px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filtered.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4  whitespace-nowrap text-sm font-medium text-gray-900">
+                        {s.lrn}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.name}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          s.gender === 'Male' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-pink-100 text-pink-800'
+                        }`}>
+                          {s.gender}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.date_of_birth
+                          ? new Date(s.date_of_birth).toLocaleDateString("en-US")
+                          : "-"}
+                      </td>
+                      {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {s.contact_number || "-"}
+                      </td> */}
+                      <td className="px-6 py-4 text-sm  text-gray-900 max-w-xs truncate">
+                        {s.address || "-"}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.father_name || "-"}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.father_contact || "-"}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.mother_name || "-"}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm text-gray-900">
+                        {s.mother_contact || "-"}
+                      </td>
+                      <td className="px-6 py-4  whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEdit(s)}
+                            className="text-yellow-600 hover:text-yellow-900 transition-colors p-1 rounded hover:bg-yellow-50"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50"
+                            title="Delete"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              
+              {filtered.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 text-lg">No students found</div>
+                  <p className="text-gray-500 mt-2">
+                    {search ? "Try adjusting your search terms" : "Add your first student to get started"}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Modal */}
+      {/* 🔹 Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg w-[600px] relative">
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-black"
-            >
-              <IoClose size={24} />
-            </button>
-            <h3 className="text-lg font-semibold mb-4">
-              {isEditing ? "Edit Student" : "Add Student"}
-            </h3>
-
-            <form onSubmit={handleSubmitStudent} className="grid grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="LRN (12 digits)"
-                value={form.lrn}
-                onChange={(e) => handleInputChange("lrn", e.target.value)}
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="LAST NAME"
-                value={form.last_name}
-                onChange={(e) => handleInputChange("last_name", e.target.value)}
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="FIRST NAME"
-                value={form.first_name}
-                onChange={(e) => handleInputChange("first_name", e.target.value)}
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="MIDDLE NAME"
-                value={form.middle_name}
-                onChange={(e) => handleInputChange("middle_name", e.target.value)}
-                className="border rounded p-2"
-              />
-              <select
-                value={form.gender}
-                onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                required
-                className="border rounded p-2"
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">
+                {isEditing ? "Edit Student" : "Add New Student"}
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
               >
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-              <input
-                type="date"
-                className="border rounded p-2 w-full"
-                value={form.date_of_birth || ""}
-                onChange={(e) =>
-                  setForm({ ...form, date_of_birth: e.target.value })
-                }
-              />
-              <input
-                type="text"
-                placeholder="CONTACT NUMBER (09XXXXXXXXX)"
-                value={form.contact_number}
-                onChange={(e) =>
-                  handleInputChange("contact_number", e.target.value)
-                }
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="ADDRESS"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="border rounded p-2 col-span-2"
-              />
-              <input
-                type="text"
-                placeholder="FATHER'S NAME"
-                value={form.father_name}
-                onChange={(e) => handleInputChange("father_name", e.target.value)}
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="FATHER'S CONTACT (09XXXXXXXXX)"
-                value={form.father_contact}
-                onChange={(e) =>
-                  handleInputChange("father_contact", e.target.value)
-                }
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="MOTHER'S NAME"
-                value={form.mother_name}
-                onChange={(e) => handleInputChange("mother_name", e.target.value)}
-                required
-                className="border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="MOTHER'S CONTACT (09XXXXXXXXX)"
-                value={form.mother_contact}
-                onChange={(e) =>
-                  handleInputChange("mother_contact", e.target.value)
-                }
-                required
-                className="border rounded p-2"
-              />
-              <div className="col-span-2 flex justify-end">
+                <IoClose size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitStudent} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    LRN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="12 digits"
+                    value={form.lrn}
+                    onChange={(e) => handleInputChange("lrn", e.target.value)}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gender <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.gender}
+                    onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Last Name"
+                    value={form.last_name}
+                    onChange={(e) => handleInputChange("last_name", e.target.value)}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="First Name"
+                    value={form.first_name}
+                    onChange={(e) => handleInputChange("first_name", e.target.value)}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Middle Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Middle Name"
+                    value={form.middle_name}
+                    onChange={(e) => handleInputChange("middle_name", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={form.date_of_birth || ""}
+                    onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Complete Address"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="09XXXXXXXXX"
+                    value={form.contact_number}
+                    onChange={(e) => handleInputChange("contact_number", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  />
+                </div> */}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Father's Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Father's Name"
+                    value={form.father_name}
+                    onChange={(e) => handleInputChange("father_name", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Father's Contact
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="09XXXXXXXXX"
+                    value={form.father_contact}
+                    onChange={(e) => handleInputChange("father_contact", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Mother's Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Mother's Name"
+                    value={form.mother_name}
+                    onChange={(e) => handleInputChange("mother_name", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Mother's Contact
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="09XXXXXXXXX"
+                    value={form.mother_contact}
+                    onChange={(e) => handleInputChange("mother_contact", e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                 >
-                  {isEditing ? "Update" : "Save"}
+                  {isEditing ? "Update Student" : "Add Student"}
                 </button>
               </div>
             </form>
